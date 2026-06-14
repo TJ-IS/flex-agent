@@ -66,7 +66,7 @@ class PlainCliRenderer:
         self._print_line(style(summary, TermStyle.GRAY))
         self._print_line(
             style(
-                "输入 open coding 任务，或 /status /tree /export /clear /help · Esc 中断 · exit 退出",
+                "输入 open coding 任务，或 /status /tree /export /eval:open /clear /help · Esc 中断 · exit 退出",
                 TermStyle.GRAY,
             )
         )

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from pathlib import Path
-
-from deepagents import create_deep_agent
+from deepagents import GeneralPurposeSubagentProfile, HarnessProfile, create_deep_agent, register_harness_profile
 from deepagents.backends import CompositeBackend, FilesystemBackend, StateBackend
 from langgraph.checkpoint.memory import MemorySaver
 
@@ -11,6 +9,21 @@ from flex_agent.orchestration.prompt import ORCHESTRATOR_PROMPT
 from flex_agent.orchestration.subagents import build_subagents
 from flex_agent.orchestration.tools import CodingToolContext, build_coding_tools, create_coding_tool_context
 from flex_agent.workspace import Workspace
+
+_HARNESS_REGISTERED = False
+
+
+def _ensure_flex_harness_profile() -> None:
+    global _HARNESS_REGISTERED
+    if _HARNESS_REGISTERED:
+        return
+    register_harness_profile(
+        "openai",
+        HarnessProfile(
+            general_purpose_subagent=GeneralPurposeSubagentProfile(enabled=False),
+        ),
+    )
+    _HARNESS_REGISTERED = True
 
 
 def build_backend(workspace: Workspace) -> CompositeBackend:
@@ -22,6 +35,7 @@ def build_backend(workspace: Workspace) -> CompositeBackend:
 
 
 def create_flex_agent(workspace: Workspace, *, tool_ctx: CodingToolContext | None = None):
+    _ensure_flex_harness_profile()
     ctx = tool_ctx or create_coding_tool_context(workspace)
     model_cfg = load_model_config()
     model = build_llm(
@@ -31,6 +45,7 @@ def create_flex_agent(workspace: Workspace, *, tool_ctx: CodingToolContext | Non
         seed=model_cfg.seed,
     )
     workspace.ensure_layout()
+    workspace.bootstrap_seed_files()
     return create_deep_agent(
         model=model,
         tools=build_coding_tools(ctx),

@@ -12,7 +12,8 @@ ORCHESTRATOR_PROMPT = """你是 flex-agent 主编排器，负责自主完成 VR/
 
 ## Workspace 布局
 
-- `corpus/codebook_done.jsonl`：原始输入语料（初始化时作为 data_path）
+- `corpus/codebook_done.jsonl`：原始输入语料（初始化时作为 data_path，不含人工 GT 标签）
+- `private/codebook_done_human.jsonl`：人工评测 benchmark（仅主编排器可访问；编码时禁止读取）
 - `corpus/raw.jsonl`：`init_open_coding_run` 采样后的工作副本，不要把它当作初始化数据源
 - `corpus/queue.json`：待编码 id
 - `corpus/partition.json`：Alice/Kevin 划分
@@ -20,7 +21,11 @@ ORCHESTRATOR_PROMPT = """你是 flex-agent 主编排器，负责自主完成 VR/
 - `codebook/dimensions.json`：当前代码本
 - `codebook/batches/{n}.json`：Kevin 批次快照
 - `quality/warnings.json`：质量告警
-- `exports/open_coding_result_*.json`：最终导出
+- `exports/open_coding_result_*.json`：编码结果导出
+- `eval/open/`：open coding 评测结果（`summary.json`、`report.txt`、`{id}.json`）
+- `eval/axial/`：主轴编码评测结果（预留）
+
+编码过程中禁止读取 `private/`、`eval/` 或将其中内容传递给子 Agent。用户可在 TUI 使用 `/eval:open` 离线评测，无需你调用评测工具。
 
 ## 标准 SOP
 

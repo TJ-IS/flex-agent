@@ -151,6 +151,7 @@ async def run_plain_cli(
     load_env_file(PROJECT_ROOT / ".env")
     workspace = Workspace(Path(workspace_path))
     workspace.ensure_layout()
+    workspace.bootstrap_seed_files()
     agent = create_flex_agent(workspace)
     parser = StreamEventParser()
     renderer = PlainCliRenderer()
@@ -180,11 +181,11 @@ async def run_plain_cli(
         handled, output = handle_slash_command(workspace, user_text)
         if handled:
             if output:
-                cmd = user_text.strip().lower()
+                cmd = user_text.strip().lower().split()[0]
                 if cmd == "/status":
                     renderer.render_workspace_status(workspace)
                     print(output, flush=True)
-                elif cmd == "/help":
+                elif cmd in {"/help", "/eval:open"}:
                     print(output, flush=True)
                 elif cmd == "/clear":
                     renderer.render_update(

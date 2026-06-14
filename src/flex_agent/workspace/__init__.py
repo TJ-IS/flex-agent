@@ -4,7 +4,9 @@ import json
 import random
 import shutil
 from pathlib import Path
+from typing import Any, Literal
 
+from flex_agent.config import PROJECT_ROOT
 from flex_agent.models import (
     DimensionDetail,
     FinishedTextItem,
@@ -27,27 +29,71 @@ class Workspace:
         self.codebook_batches_dir = self.codebook_dir / "batches"
         self.quality_dir = self.root / "quality"
         self.exports_dir = self.root / "exports"
+        self.private_dir = self.root / "private"
+        self.eval_dir = self.root / "eval"
+        self.eval_open_dir = self.eval_dir / "open"
+        self.eval_axial_dir = self.eval_dir / "axial"
+
+    def eval_kind_dir(self, kind: Literal["open", "axial"]) -> Path:
+        if kind == "open":
+            return self.eval_open_dir
+        return self.eval_axial_dir
+
+    @property
+    def corpus_seed_path(self) -> Path:
+        return self.corpus_dir / "codebook_done.jsonl"
+
+    @property
+    def human_benchmark_path(self) -> Path:
+        return self.private_dir / "codebook_done_human.jsonl"
 
     def ensure_layout(self) -> None:
         for path in (
             self.meta_dir,
             self.corpus_dir,
+            self.private_dir,
             self.coding_dir,
             self.codebook_dir,
             self.codebook_batches_dir,
             self.quality_dir,
             self.exports_dir,
+            self.eval_open_dir,
+            self.eval_axial_dir,
         ):
             path.mkdir(parents=True, exist_ok=True)
 
+    def bootstrap_seed_files(self) -> dict[str, str]:
+        """Copy packaged seed JSONL files into workspace if missing or stale."""
+        self.ensure_layout()
+        seeds = {
+            str(self.corpus_seed_path): PROJECT_ROOT / "data" / "codebook_done.jsonl",
+            str(self.human_benchmark_path): PROJECT_ROOT / "data" / "codebook_done_human.jsonl",
+        }
+        actions: dict[str, str] = {}
+        for dest, source in seeds.items():
+            dest_path = Path(dest)
+            if not source.exists():
+                actions[str(dest_path)] = "missing_source"
+                continue
+            if not dest_path.exists() or source.stat().st_mtime > dest_path.stat().st_mtime:
+                shutil.copy2(source, dest_path)
+                actions[str(dest_path)] = "copied"
+            else:
+                actions[str(dest_path)] = "kept"
+        return actions
+
+    def benchmark_ready(self) -> bool:
+        return self.corpus_seed_path.exists() and self.human_benchmark_path.exists()
+
     def clear_artifacts(self) -> None:
-        """Remove all workspace state except files under corpus/."""
+        """Remove run artifacts; preserve corpus/ and private/ seed files."""
         for path in (
             self.meta_dir,
             self.coding_dir,
             self.codebook_dir,
             self.quality_dir,
             self.exports_dir,
+            self.eval_dir,
         ):
             if path.exists():
                 shutil.rmtree(path)
@@ -224,6 +270,146 @@ class Workspace:
         self._write_json(self.quality_dir / "warnings.json", {})
         return meta
 
+    def eval_summary_path(self, kind: Literal["open", "axial"]) -> Path:
+        return self.eval_kind_dir(kind) / "summary.json"
+
+    def eval_report_path(self, kind: Literal["open", "axial"]) -> Path:
+        return self.eval_kind_dir(kind) / "report.txt"
+
+    def eval_text_path(self, kind: Literal["open", "axial"], text_id: int) -> Path:
+        return self.eval_kind_dir(kind) / f"{text_id}.json"
+
+    @staticmethod
+    def _strip_eval_per_text(section: dict[str, Any] | None) -> dict[str, Any] | None:
+        if section is None:
+            return None
+        return {key: value for key, value in section.items() if key != "per_text"}
+
+    @staticmethod
+    def _merge_eval_per_text(payload: dict[str, Any]) -> dict[int, dict[str, Any]]:
+        by_id: dict[int, dict[str, Any]] = {}
+        keyword = payload.get("item_level_keyword")
+        semantic = payload.get("item_level_semantic")
+        if isinstance(keyword, dict):
+            for row in keyword.get("per_text", []):
+                text_id = int(row["text_id"])
+                by_id[text_id] = {"text_id": text_id, "keyword": row, "semantic": None}
+        if isinstance(semantic, dict):
+            for row in semantic.get("per_text", []):
+                text_id = int(row["text_id"])
+                if text_id in by_id:
+                    by_id[text_id]["semantic"] = row
+                else:
+                    by_id[text_id] = {"text_id": text_id, "keyword": None, "semantic": row}
+        return by_id
+
+    def save_eval_result(
+        self,
+        kind: Literal["open", "axial"],
+        *,
+        payload: dict[str, Any],
+        report: str,
+        meta: dict[str, Any],
+    ) -> Path:
+        """Persist eval summary, report, and per-text results under eval/{kind}/."""
+        kind_dir = self.eval_kind_dir(kind)
+        kind_dir.mkdir(parents=True, exist_ok=True)
+
+        per_text_by_id = self._merge_eval_per_text(payload)
+        for text_id, text_payload in sorted(per_text_by_id.items()):
+            self._write_json(self.eval_text_path(kind, text_id), text_payload)
+
+        summary = {
+            key: value
+            for key, value in payload.items()
+            if key not in {"item_level_keyword", "item_level_semantic"}
+        }
+        summary["item_level_keyword"] = self._strip_eval_per_text(
+            payload.get("item_level_keyword")
+        )
+        summary["item_level_semantic"] = self._strip_eval_per_text(
+            payload.get("item_level_semantic")
+        )
+        summary.update(meta)
+        summary_path = self.eval_summary_path(kind)
+        self._write_json(summary_path, summary)
+        self.eval_report_path(kind).write_text(report, encoding="utf-8")
+
+        current_ids = set(per_text_by_id)
+        for path in kind_dir.glob("*.json"):
+            if path.name == "summary.json":
+                continue
+            try:
+                text_id = int(path.stem)
+            except ValueError:
+                path.unlink(missing_ok=True)
+                continue
+            if text_id not in current_ids:
+                path.unlink()
+        return summary_path
+
+    def list_eval_text_ids(self, kind: Literal["open", "axial"]) -> list[int]:
+        kind_dir = self.eval_kind_dir(kind)
+        if not kind_dir.exists():
+            return []
+        ids: list[int] = []
+        for path in kind_dir.glob("*.json"):
+            if path.name == "summary.json":
+                continue
+            try:
+                ids.append(int(path.stem))
+            except ValueError:
+                continue
+        return sorted(ids)
+
+    def load_eval_summary(self, kind: Literal["open", "axial"]) -> dict[str, Any] | None:
+        raw = self._read_json(self.eval_summary_path(kind), None)
+        return dict(raw) if raw else None
+
+    def load_eval_text(self, kind: Literal["open", "axial"], text_id: int) -> dict[str, Any] | None:
+        raw = self._read_json(self.eval_text_path(kind, text_id), None)
+        return dict(raw) if raw else None
+
+    def save_eval_text(
+        self,
+        kind: Literal["open", "axial"],
+        text_id: int,
+        payload: dict[str, Any],
+    ) -> None:
+        """Write or merge a single eval/{kind}/{id}.json result."""
+        self.eval_kind_dir(kind).mkdir(parents=True, exist_ok=True)
+        merged = dict(self.load_eval_text(kind, text_id) or {"text_id": text_id})
+        merged.update(payload)
+        merged["text_id"] = text_id
+        self._write_json(self.eval_text_path(kind, text_id), merged)
+
+    def save_eval_summary(
+        self,
+        kind: Literal["open", "axial"],
+        *,
+        payload: dict[str, Any],
+        report: str,
+        meta: dict[str, Any],
+    ) -> Path:
+        """Persist eval summary and report without rewriting per-text files."""
+        self.eval_kind_dir(kind).mkdir(parents=True, exist_ok=True)
+        summary = {
+            key: value
+            for key, value in payload.items()
+            if key not in {"item_level_keyword", "item_level_semantic"}
+        }
+        summary["item_level_keyword"] = self._strip_eval_per_text(
+            payload.get("item_level_keyword")
+        )
+        summary["item_level_semantic"] = self._strip_eval_per_text(
+            payload.get("item_level_semantic")
+        )
+        summary.update(meta)
+        summary_path = self.eval_summary_path(kind)
+        self._write_json(summary_path, summary)
+        self.eval_report_path(kind).write_text(report, encoding="utf-8")
+        return summary_path
+
     def status(self) -> dict:
         meta = self.load_run_meta()
         partition = self.load_partition()
@@ -232,6 +418,9 @@ class Workspace:
         return {
             "workspace": str(self.root),
             "run": meta.model_dump() if meta else None,
+            "benchmark_ready": self.benchmark_ready(),
+            "corpus_seed": str(self.corpus_seed_path),
+            "human_benchmark": str(self.human_benchmark_path),
             "texts_total": len(self.load_texts()),
             "coded_count": len(coded_ids),
             "queue_remaining": len(self.load_queue()),
@@ -239,6 +428,9 @@ class Workspace:
             "kevin_text_ids": partition.kevin_text_ids,
             "dimensions_count": len(dimensions),
             "warnings": self.load_warnings(),
+            "eval_open_count": len(self.list_eval_text_ids("open")),
+            "eval_axial_count": len(self.list_eval_text_ids("axial")),
+            "latest_eval_open": self.load_eval_summary("open"),
         }
 
 
