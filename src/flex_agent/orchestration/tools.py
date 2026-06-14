@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -55,6 +57,13 @@ class ExportInput(BaseModel):
     pass
 
 
+ProgressCallback = Callable[[str], None]
+
+
+def _default_bob_progress(message: str) -> None:
+    print(message, file=sys.stderr, flush=True)
+
+
 @dataclass
 class CodingToolContext:
     workspace: Workspace
@@ -63,6 +72,7 @@ class CodingToolContext:
     prompt_ctx: PromptContext
     prompts_dir_label: str
     workspace_dir_label: str
+    on_progress: ProgressCallback | None = _default_bob_progress
 
 
 def _chunked(ids: list[int], size: int) -> list[list[int]]:
@@ -115,23 +125,42 @@ def build_coding_tools(ctx: CodingToolContext) -> list[StructuredTool]:
         if not target_ids:
             return "No texts to code."
 
-        sem = asyncio.Semaphore(max(1, concurrency_limit))
+        total = len(target_ids)
+        limit = max(1, concurrency_limit)
+        sem = asyncio.Semaphore(limit)
+        lock = asyncio.Lock()
         warnings = QualityWarnings()
         coded = 0
         skipped: list[int] = []
+
+        def _emit(message: str) -> None:
+            if ctx.on_progress is not None:
+                ctx.on_progress(message)
+
+        _emit(f"[bob] 开始编码 {total} 条 (concurrency={limit})")
+
+        async def _record_skip(text_id: int, *, note: str | None = None) -> None:
+            async with lock:
+                skipped.append(text_id)
+                if note is not None:
+                    warnings.notes.append(note)
+                done = coded + len(skipped)
+                _emit(f"[bob] 跳过 text_id={text_id} ({done}/{total})")
 
         async def _code_one(text_id: int) -> None:
             nonlocal coded
             text = texts.get(text_id)
             if text is None:
-                skipped.append(text_id)
+                await _record_skip(text_id)
                 return
             async with sem:
                 try:
                     output = await arun_bob(ctx.llm, ctx.prompt_ctx, text)
                 except Exception as exc:
-                    skipped.append(text_id)
-                    warnings.notes.append(f"bob skipped text_id={text_id}: {exc!r}")
+                    await _record_skip(
+                        text_id,
+                        note=f"bob skipped text_id={text_id}: {exc!r}",
+                    )
                     return
 
             finished = FinishedTextItem(
@@ -151,7 +180,13 @@ def build_coding_tools(ctx: CodingToolContext) -> list[StructuredTool]:
             normalized, item_warnings = normalize_finished_text(finished)
             warnings.add(item_warnings)
             ctx.workspace.save_coding(normalized)
-            coded += 1
+            async with lock:
+                coded += 1
+                done = coded + len(skipped)
+                _emit(
+                    f"[bob] 完成 text_id={text_id} ({done}/{total}) "
+                    f"· items={len(output.items)}"
+                )
 
         await asyncio.gather(*(_code_one(text_id) for text_id in target_ids))
         remaining = [text_id for text_id in ctx.workspace.load_queue() if text_id not in ctx.workspace.list_coded_ids()]
@@ -344,4 +379,5 @@ def create_coding_tool_context(
         prompt_ctx=PromptContext.load(resolved_prompts),
         prompts_dir_label=path_label(resolved_prompts),
         workspace_dir_label=path_label(workspace.root),
+        on_progress=_default_bob_progress,
     )

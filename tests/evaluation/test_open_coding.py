@@ -81,8 +81,9 @@ class EvalPromptTests(unittest.TestCase):
     def test_text_alignment_prompt_has_placeholder(self) -> None:
         prompt = text_alignment_prompt()
         self.assertIn("{texts_json}", prompt)
-        self.assertIn("ReAct", prompt)
+        self.assertNotIn("ReAct", prompt)
         self.assertIn("允许多对一", prompt)
+        self.assertIn("只输出 JSON", prompt)
         self.assertNotIn("游戏趣味性", prompt)
         self.assertNotIn("例如", prompt)
 
@@ -90,7 +91,9 @@ class EvalPromptTests(unittest.TestCase):
         prompt = dimension_name_alignment_prompt(human_list="- 画面", agent_list="- 视觉质量")
         self.assertIn("- 画面", prompt)
         self.assertIn("- 视觉质量", prompt)
-        self.assertIn("ReAct", prompt)
+        self.assertNotIn("ReAct", prompt)
+        self.assertIn("允许多对一", prompt)
+        self.assertIn("只输出 JSON", prompt)
         self.assertNotIn("例如", prompt)
 
 
