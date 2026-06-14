@@ -1,0 +1,26 @@
+[project]
+name = "flex-agent"
+version = "0.1.0"
+description = "DeepAgent-based open coding workspace with file persistence"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "deepagents>=0.6.10",
+    "langchain>=1.3.9",
+    "langchain-openai>=1.3.2",
+    "langsmith>=0.8.15",
+    "pydantic>=2.13.4",
+]
+
+[project.scripts]
+flex-agent = "flex_agent.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flex_agent"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/flex_agent", "prompts"]
