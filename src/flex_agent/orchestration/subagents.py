@@ -17,6 +17,17 @@ PRIVATE_ACCESS_NOTE = (
     "不得读取、引用或向其他 Agent 传递其中数据。"
 )
 
+BOB_WORKSPACE_SCHEMA_NOTE = (
+    "\n\n聊天回复可以简洁；如需写入 `coding/{id}.json`，内容必须是单个 JSON 对象，字段为 "
+    "`id`、`content`、`content_with_labels`、`items`，其中 `items` 的元素包含 "
+    "`name`、`evidence`、`normalized_label`、`reason`。"
+)
+
+CODEBOOK_WORKSPACE_SCHEMA_NOTE = (
+    "\n\n聊天回复可以简洁；如需写入 `codebook/dimensions.json` 或批次快照，文件内容必须是"
+    "维度对象数组，每个对象包含 `name`、`items`、`definition`；不要写成带 `dimensions` 包装层的对象。"
+)
+
 
 def build_subagents(prompt_ctx: PromptContext | None = None) -> list[dict]:
     ctx = prompt_ctx or PromptContext.load()
@@ -30,7 +41,8 @@ def build_subagents(prompt_ctx: PromptContext | None = None) -> list[dict]:
             "system_prompt": (
                 ctx.bob_template
                 + "\n\n你是子 Agent。读取 corpus/raw.jsonl 与 coding/ 文件，"
-                "必要时用 write_file 写入 coding/{id}.json。只返回简洁结论。"
+                "必要时用 write_file 写入 coding/{id}.json。"
+                + BOB_WORKSPACE_SCHEMA_NOTE
                 + PRIVATE_ACCESS_NOTE
             ),
             "permissions": SUBAGENT_DENY_PRIVATE,
@@ -44,6 +56,7 @@ def build_subagents(prompt_ctx: PromptContext | None = None) -> list[dict]:
                 ctx.alice_template
                 + "\n\n你是子 Agent。从 coding/ 中读取 partition.codebook_text_ids 对应文件，"
                 "归纳后写入 codebook/dimensions.json。"
+                + CODEBOOK_WORKSPACE_SCHEMA_NOTE
                 + PRIVATE_ACCESS_NOTE
             ),
             "permissions": SUBAGENT_DENY_PRIVATE,
@@ -57,6 +70,7 @@ def build_subagents(prompt_ctx: PromptContext | None = None) -> list[dict]:
                 ctx.kevin_template
                 + "\n\n你是子 Agent。读取 codebook/dimensions.json 与 Kevin 批次对应 coding 文件，"
                 "输出完整更新版 dimensions。"
+                + CODEBOOK_WORKSPACE_SCHEMA_NOTE
                 + PRIVATE_ACCESS_NOTE
             ),
             "permissions": SUBAGENT_DENY_PRIVATE,

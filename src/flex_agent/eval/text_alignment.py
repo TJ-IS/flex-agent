@@ -18,13 +18,13 @@ from flex_agent.eval.prompts import text_alignment_prompt
 class SemanticMatch(BaseModel):
     agent_dimension: str
     matched_human_dimension: str | None = None
-    thought: str = Field(default="", description="ReAct Thought: semantic analysis for this agent dimension")
-    action: str = Field(default="", description="ReAct Action: MATCH <human_dim> or NO_MATCH")
+    thought: str = Field(default="", description="可选的简短判断依据。")
+    action: str = Field(default="", description="可选的简短匹配结果标记。")
 
 
 class TextSemanticAlignment(BaseModel):
     text_id: str
-    reasoning_trace: str = Field(default="", description="Optional ReAct summary for the whole text")
+    reasoning_trace: str = Field(default="", description="可选的整条文本简短判断摘要。")
     matches: list[SemanticMatch] = Field(default_factory=list)
 
 

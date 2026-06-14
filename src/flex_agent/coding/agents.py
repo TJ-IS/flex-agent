@@ -97,20 +97,24 @@ class PromptContext(BaseModel):
 
 
 class BobItemDetail(BaseModel):
-    name: str = Field(description="对提取短语的中文简短概括。")
+    name: str = Field(description="对提取片段的中文简短概括。")
     evidence: str | None = Field(default=None, description="原评论中的精确或近似原文证据。")
     normalized_label: str = Field(description="该条目的主中文维度。")
     reason: str | None = Field(default=None, description="一句简短中文说明，解释为何该证据支持该维度。")
 
 
 class BobOutput(BaseModel):
-    content_with_labels: str
+    content_with_labels: str = Field(
+        description="原始内容，只在被提取片段外包裹 <p>...</p> 标签，不改写原句或使用其他标签。"
+    )
     items: List[BobItemDetail] = Field(default_factory=list)
 
 
 class AliceDimensionDetail(BaseModel):
     name: str = Field(description="维度名称。")
-    items: List[str] = Field(description="属于该维度的规范化中文条目标签，必须来自 items_pool。")
+    items: List[str] = Field(
+        description="属于该维度的中文条目标签，必须来自 items_details.label 或 items_pool 中的原始标签。"
+    )
     definition: str = Field(description="用一句简洁的中文定义该维度的边界。")
 
 
@@ -121,7 +125,7 @@ class AliceOutput(BaseModel):
 class KevinDimensionDetail(BaseModel):
     name: str = Field(description="维度名称。")
     items: List[str] = Field(
-        description="属于该维度的规范化中文条目标签，必须来自传入的 items_pool 或已有维度。"
+        description="属于该维度的中文条目列表，必须是已有代码本条目或当前批次输入中的原始标签。"
     )
     definition: str = Field(description="用一句简洁的中文定义该维度的边界。")
 

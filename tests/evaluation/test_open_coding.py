@@ -16,7 +16,7 @@ from flex_agent.eval.core import (
 from flex_agent.eval.metrics import compute_item_metrics_simple
 from flex_agent.eval.prompts import dimension_name_alignment_prompt, text_alignment_prompt
 from flex_agent.eval.semantic import apply_semantic_alignment
-from flex_agent.eval.text_alignment import build_semantic_alignment_for_texts
+from flex_agent.eval.text_alignment import BatchSemanticAlignment, build_semantic_alignment_for_texts
 from flex_agent.models import FinishedItemDetail, FinishedTextItem
 from flex_agent.workspace import Workspace
 
@@ -95,6 +95,12 @@ class EvalPromptTests(unittest.TestCase):
         self.assertIn("允许多对一", prompt)
         self.assertIn("只输出 JSON", prompt)
         self.assertNotIn("例如", prompt)
+
+    def test_semantic_alignment_schema_does_not_reference_react(self) -> None:
+        schema_text = json.dumps(BatchSemanticAlignment.model_json_schema(), ensure_ascii=False)
+        self.assertNotIn("ReAct", schema_text)
+        self.assertIn("可选的简短判断依据", schema_text)
+        self.assertIn("可选的简短匹配结果标记", schema_text)
 
 
 class SemanticAlignmentTests(unittest.TestCase):
