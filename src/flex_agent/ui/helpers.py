@@ -5,7 +5,7 @@ import sys
 from typing import Callable
 
 from flex_agent.coding.export import export_open_coding_result
-from flex_agent.eval import evaluate_workspace
+from flex_agent.eval import evaluate_axial_workspace, evaluate_workspace
 from flex_agent.config import (
     get_prompts_dir,
     get_workspace_dir,
@@ -39,6 +39,9 @@ def format_help() -> str:
             "  /eval:open   - evaluate open coding vs human benchmark (default: both)",
             "  /eval:open keyword|semantic|both|metrics",
             "               metrics = re-aggregate CPR from eval/open/*.json (no LLM)",
+            "  /eval:axial  - evaluate axial coding vs human categories (default: both)",
+            "  /eval:axial keyword|semantic|both|metrics",
+            "               metrics = re-aggregate CPR from eval/axial/*.json (no LLM)",
             "  /clear       - remove coding/codebook/meta/quality/exports (keep corpus/ & private/)",
             "  /help        - show this help",
             "  Esc      - interrupt the current agent turn",
@@ -77,6 +80,23 @@ def handle_slash_command(workspace: Workspace, command: str) -> tuple[bool, str 
             return True, str(exc)
         except Exception as exc:
             return True, f"评测失败: {exc!r}"
+        return True, report
+    if cmd == "/eval:axial":
+        mode = parts[1].lower() if len(parts) > 1 and not parts[1].startswith("--") else "both"
+        if mode not in {"keyword", "semantic", "both", "metrics"}:
+            return True, f"未知评测模式: {mode}（可选 keyword / semantic / both / metrics）"
+        align = "--align" in parts
+        try:
+            report = evaluate_axial_workspace(
+                workspace,
+                mode=mode,  # type: ignore[arg-type]
+                align=align,
+                on_progress=lambda msg: print(msg, file=sys.stderr, flush=True),
+            )
+        except RuntimeError as exc:
+            return True, str(exc)
+        except Exception as exc:
+            return True, f"主轴评测失败: {exc!r}"
         return True, report
     if cmd == "/clear":
         workspace.clear_artifacts()

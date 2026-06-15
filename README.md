@@ -7,7 +7,7 @@
 - **DeepAgent 主编排器**：`write_todos` 自主规划，`task` 调度 Bob / Alice / Kevin 子 Agent
 - **文件即状态**：`coding/`、`codebook/`、`corpus/` 等目录是唯一持久化来源
 - **交互式 CLI**：Plan / Step Timeline / Workspace 状态，Claude Code 风格步骤流
-- **内置 Open Coding 评测**：TUI `/eval:open` 对比人工 benchmark（JMIS Consistency / Precision / Recall）
+- **内置 Open / Axial 评测**：TUI `/eval:open`、`/eval:axial` 对比人工 benchmark（JMIS Consistency / Precision / Recall）
 - **gt-agent 兼容导出**：`exports/open_coding_result_*.json` 可继续用于 legacy eval
 - **可切换 Prompt / Workspace**：支持多套提示词与 workspace 分类，便于 A/B 评测
 
@@ -46,6 +46,9 @@ Slash 命令：
 - `/eval:open` — 评测当前 open coding（默认 both：维度名匹配 + LLM 语义对齐）
 - `/eval:open keyword` — 仅维度名匹配（无 LLM）
 - `/eval:open both --align` — 额外启用维度名 LLM 映射
+- `/eval:axial` — 评测主轴编码（workspace 级一次比较，默认 both）
+- `/eval:axial keyword|semantic|both|metrics` — 同 open；metrics 从 `eval/axial/global.json` 重聚合
+- `/eval:axial both --align` — 额外启用 agent 主轴 → human category LLM 映射
 - `/clear` — 清除运行产物（保留 `corpus/` 与 `private/`，含 `eval/`）
 - `/help` — 帮助
 
@@ -76,7 +79,7 @@ flex-agent/
         ├── quality/warnings.json
         ├── eval/
         │   ├── open/               # open coding 评测
-        │   └── axial/              # 主轴编码评测（预留）
+        │   └── axial/              # 主轴编码评测
         └── exports/
             └── open_coding_result_*.json
 ```
@@ -89,7 +92,7 @@ uv run python -m unittest discover -s tests -v
 
 测试目录与源码分包对应：`tests/test_path_resolver.py`、`tests/workspace/`、`tests/coding/`、`tests/evaluation/`、`tests/ui/`。
 
-评测相关 prompt 位于 `prompts/baseline/eval_text_alignment.md` 与 `prompts/baseline/eval_dimension_name_alignment.md`。
+评测相关 prompt 位于 `prompts/baseline/eval_text_alignment.md`、`eval_dimension_name_alignment.md` 与 `eval_axial_category_alignment.md`。
 
 ## 源码结构
 
