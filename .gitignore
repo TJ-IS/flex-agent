@@ -11,6 +11,10 @@ wheels/
 
 # Runtime workspaces at repo root (generated coding artifacts)
 /workspaces/
+/workspaces-mi/
+
+# Direct inference baseline generated runs
+/direct_inference_eval/runs/
 
 # Web frontend generated files
 web/.next/
