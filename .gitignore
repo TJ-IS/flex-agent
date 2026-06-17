@@ -11,7 +11,7 @@ wheels/
 
 # Runtime workspaces at repo root (generated coding artifacts)
 /workspaces/
-/workspaces-mi/
+/workspaces-*/
 
 # Direct inference baseline generated runs
 /direct_inference_eval/runs/
