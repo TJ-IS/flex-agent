@@ -3,12 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal
 
-from direct_eval.constants import HUMAN_CATEGORIES
-from direct_eval.inference import run_direct_batches
-from direct_eval.io import load_human_records, write_json, write_predictions_jsonl
-from direct_eval.llm import LLMClient, OpenAIChatClient, load_env_file
-from direct_eval.metrics import evaluate_axial, evaluate_open
-from direct_eval.report import format_axial_report, format_open_report
+from .constants import HUMAN_CATEGORIES
+from .inference import run_direct_batches
+from .io import load_human_records, write_json, write_predictions_jsonl
+from .llm import LLMClient, OpenAIChatClient, load_env_file
+from .metrics import evaluate_axial, evaluate_open
+from .report import format_axial_report, format_open_report
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROMPT_PATH = PROJECT_ROOT / "direct_inference_eval" / "prompts" / "direct_batch.md"

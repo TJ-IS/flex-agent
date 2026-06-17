@@ -4,10 +4,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from direct_eval.io import prediction_from_dict, write_json
-from direct_eval.llm import LLMClient
-from direct_eval.parser import parse_prediction_response
-from direct_eval.schemas import HumanRecord, PredictionRecord
+from .io import prediction_from_dict, write_json
+from .llm import LLMClient
+from .parser import parse_prediction_response
+from .schemas import HumanRecord, PredictionRecord
 
 
 def chunked(records: list[HumanRecord], size: int) -> list[list[HumanRecord]]:

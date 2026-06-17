@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from direct_eval.constants import normalize_category, normalize_dimension
-from direct_eval.schemas import HumanRecord, PredictionItem, PredictionRecord
+from .constants import normalize_category, normalize_dimension
+from .schemas import HumanRecord, PredictionItem, PredictionRecord
 
 
 def _active_human_items(record: dict[str, Any]) -> tuple[dict[str, int], set[str]]:
@@ -98,8 +98,7 @@ def write_predictions_jsonl(path: Path, predictions: dict[int, PredictionRecord]
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         for text_id in sorted(predictions):
-            handle.write(json.dumps(predictions[text_id].as_dict(), ensure_ascii=False) + "
-")
+            handle.write(json.dumps(predictions[text_id].as_dict(), ensure_ascii=False) + "\n")
 
 
 def load_predictions_jsonl(path: Path) -> dict[int, PredictionRecord]:

@@ -4,8 +4,8 @@ import json
 import re
 from typing import Any
 
-from direct_eval.io import prediction_from_dict
-from direct_eval.schemas import PredictionRecord
+from .io import prediction_from_dict
+from .schemas import PredictionRecord
 
 
 def extract_json_payload(raw_text: str) -> Any:

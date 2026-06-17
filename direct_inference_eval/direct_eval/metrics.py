@@ -4,15 +4,15 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from direct_eval.constants import (
+from .constants import (
     CATEGORY_KEYWORD_ALIASES,
     HUMAN_CATEGORIES,
     normalize_category,
     normalize_dimension,
 )
-from direct_eval.llm import LLMClient
-from direct_eval.parser import extract_json_payload
-from direct_eval.schemas import HumanRecord, PredictionRecord
+from .llm import LLMClient
+from .parser import extract_json_payload
+from .schemas import HumanRecord, PredictionRecord
 
 GLOBAL_AXIAL_TEXT_ID = 0
 

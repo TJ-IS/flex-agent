@@ -31,8 +31,7 @@ def format_open_report(
     if item_keyword is None and item_semantic is None:
         lines.append("未生成任何评测结果。")
     lines.append(sep)
-    return "
-".join(lines)
+    return "\n".join(lines)
 
 
 def format_axial_report(
@@ -65,8 +64,7 @@ def format_axial_report(
     if item_keyword is None and item_semantic is None:
         lines.append("未生成任何评测结果。")
     lines.append(sep)
-    return "
-".join(lines)
+    return "\n".join(lines)
 
 
 def _format_section(title: str, item_result: dict[str, Any]) -> list[str]:
