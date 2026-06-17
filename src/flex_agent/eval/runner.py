@@ -176,12 +176,12 @@ def evaluate_workspace(
         )
         agg = aggregate_eval_results(workspace.eval_open_dir)
         if agg.get("item_level_keyword"):
-            micro = agg["item_level_keyword"]["micro"]
+            macro = agg["item_level_keyword"]["macro"]
             _emit_progress(
                 on_progress,
                 (
-                    f"[eval] keyword 聚合: C={micro['consistency']:.1%} "
-                    f"P={micro['precision']:.1%} R={micro['recall']:.1%}"
+                    f"[eval] keyword 聚合: C={macro['consistency']:.1%} "
+                    f"P={macro['precision']:.1%} R={macro['recall']:.1%}"
                 ),
             )
 
@@ -205,12 +205,12 @@ def evaluate_workspace(
         )
         agg = aggregate_eval_results(workspace.eval_open_dir)
         if agg.get("item_level_semantic"):
-            micro = agg["item_level_semantic"]["micro"]
+            macro = agg["item_level_semantic"]["macro"]
             _emit_progress(
                 on_progress,
                 (
-                    f"[eval] semantic 聚合: C={micro['consistency']:.1%} "
-                    f"P={micro['precision']:.1%} R={micro['recall']:.1%} "
+                    f"[eval] semantic 聚合: C={macro['consistency']:.1%} "
+                    f"P={macro['precision']:.1%} R={macro['recall']:.1%} "
                     f"(complete {agg['semantic_complete']}/{len(pairs)})"
                 ),
             )

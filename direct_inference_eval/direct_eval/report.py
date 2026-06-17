@@ -68,21 +68,20 @@ def format_axial_report(
 
 
 def _format_section(title: str, item_result: dict[str, Any]) -> list[str]:
-    micro = item_result["micro"]
     macro = item_result["macro"]
     lines = [
         title,
         "-" * 60,
         f"共同评估文本数: {item_result['common_texts']}",
         "",
-        f"{'指标':<14} {'Macro-Avg':>10}  {'Micro-Avg':>10}",
-        f"Consistency    {pct(macro['consistency']):>10}  {pct(micro['consistency']):>10}",
-        f"Precision      {pct(macro['precision']):>10}  {pct(micro['precision']):>10}",
-        f"Recall         {pct(macro['recall']):>10}  {pct(micro['recall']):>10}",
+        f"{'指标':<14} {'Macro-Avg':>10}",
+        f"Consistency    {pct(macro['consistency']):>10}",
+        f"Precision      {pct(macro['precision']):>10}",
+        f"Recall         {pct(macro['recall']):>10}",
         "",
         (
-            f"Micro 计数: Human={micro['n_human']} Agent={micro['n_agent']} "
-            f"∩={micro['n_intersection']} ∪={micro['n_union']}"
+            f"计数: Human={macro['n_human']} Agent={macro['n_agent']} "
+            f"∩={macro['n_intersection']} ∪={macro['n_union']}"
         ),
     ]
     if "nums_both" in item_result:

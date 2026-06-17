@@ -147,14 +147,12 @@ def _aggregate_semantic_metrics(
         n_intersection=total_both,
         n_union=total_both + total_llm_only + total_human_only,
     )
-    micro = _counts_to_metrics(total_both, total_llm_only, total_human_only)
     return {
         "common_texts": len(entries),
         "nums_llm_only": total_llm_only,
         "nums_human_only": total_human_only,
         "nums_both": total_both,
         "macro": macro.as_dict(),
-        "micro": micro.as_dict(),
         "per_text": per_text,
         "alignment": {
             text_id: all_alignments.get(text_id, {})

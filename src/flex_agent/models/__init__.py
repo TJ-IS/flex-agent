@@ -32,7 +32,7 @@ class TextItem(BaseModel):
 
 class FinishedItemDetail(BaseModel):
     name: str
-    labels: str | None = None
+    labels: str | None = Field(default=None, exclude=True)
     evidence: str | None = None
     normalized_label: str | None = None
     reason: str | None = None

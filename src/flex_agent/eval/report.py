@@ -8,7 +8,6 @@ def _pct(val: float) -> str:
 
 
 def _format_item_section(title: str, item_result: dict[str, Any]) -> list[str]:
-    micro = item_result["micro"]
     macro = item_result["macro"]
     lines = [
         title,
@@ -16,14 +15,14 @@ def _format_item_section(title: str, item_result: dict[str, Any]) -> list[str]:
         f"共同评估文本数: {item_result['common_texts']}",
         f"仅人工: {item_result.get('skipped_human_only', 0)}  仅 Agent: {item_result.get('skipped_agent_only', 0)}",
         "",
-        f"{'指标':<14} {'Macro-Avg':>10}  {'Micro-Avg':>10}",
-        f"Consistency    {_pct(macro['consistency']):>10}  {_pct(micro['consistency']):>10}",
-        f"Precision      {_pct(macro['precision']):>10}  {_pct(micro['precision']):>10}",
-        f"Recall         {_pct(macro['recall']):>10}  {_pct(micro['recall']):>10}",
+        f"{'指标':<14} {'Macro-Avg':>10}",
+        f"Consistency    {_pct(macro['consistency']):>10}",
+        f"Precision      {_pct(macro['precision']):>10}",
+        f"Recall         {_pct(macro['recall']):>10}",
         "",
         (
-            f"Micro 计数: Human={micro['n_human']} Agent={micro['n_agent']} "
-            f"∩={micro['n_intersection']} ∪={micro['n_union']}"
+            f"计数: Human={macro['n_human']} Agent={macro['n_agent']} "
+            f"∩={macro['n_intersection']} ∪={macro['n_union']}"
         ),
     ]
     if "nums_both" in item_result:
@@ -66,21 +65,20 @@ def format_open_coding_report(
 
 
 def _format_axial_section(title: str, item_result: dict[str, Any]) -> list[str]:
-    micro = item_result["micro"]
     macro = item_result["macro"]
     lines = [
         title,
         "-" * 60,
         "评测粒度: workspace（单次全局比较，严格一对一）",
         "",
-        f"{'指标':<14} {'Macro-Avg':>10}  {'Micro-Avg':>10}",
-        f"Consistency    {_pct(macro['consistency']):>10}  {_pct(micro['consistency']):>10}",
-        f"Precision      {_pct(macro['precision']):>10}  {_pct(micro['precision']):>10}",
-        f"Recall         {_pct(macro['recall']):>10}  {_pct(micro['recall']):>10}",
+        f"{'指标':<14} {'Macro-Avg':>10}",
+        f"Consistency    {_pct(macro['consistency']):>10}",
+        f"Precision      {_pct(macro['precision']):>10}",
+        f"Recall         {_pct(macro['recall']):>10}",
         "",
         (
-            f"计数: Human={micro['n_human']} Agent={micro['n_agent']} "
-            f"∩={micro['n_intersection']} ∪={micro['n_union']}"
+            f"计数: Human={macro['n_human']} Agent={macro['n_agent']} "
+            f"∩={macro['n_intersection']} ∪={macro['n_union']}"
         ),
     ]
     if "nums_both" in item_result:

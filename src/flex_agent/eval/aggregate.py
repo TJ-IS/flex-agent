@@ -1,4 +1,4 @@
-"""Aggregate per-text eval results into macro/micro CPR metrics."""
+"""Aggregate per-text eval results into macro CPR metrics."""
 
 from __future__ import annotations
 
@@ -19,7 +19,6 @@ def _aggregate_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "nums_human_only": 0,
             "nums_both": 0,
             "macro": empty,
-            "micro": empty,
             "per_text": [],
         }
 
@@ -39,22 +38,12 @@ def _aggregate_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         n_intersection=total_both,
         n_union=total_union,
     )
-    micro = EvalMetrics(
-        consistency=total_both / total_union if total_union else 0.0,
-        precision=total_both / total_agent if total_agent else 0.0,
-        recall=total_both / total_human if total_human else 0.0,
-        n_human=total_human,
-        n_agent=total_agent,
-        n_intersection=total_both,
-        n_union=total_union,
-    )
     return {
         "common_texts": len(rows),
         "nums_llm_only": total_llm_only,
         "nums_human_only": total_human_only,
         "nums_both": total_both,
         "macro": macro.as_dict(),
-        "micro": micro.as_dict(),
         "per_text": rows,
     }
 

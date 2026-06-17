@@ -97,13 +97,13 @@ async def batch_semantic_judge(
                 agg = aggregate_eval_results(workspace.eval_open_dir)
                 semantic_agg = agg.get("item_level_semantic")
                 if on_progress is not None and semantic_agg:
-                    micro = semantic_agg["micro"]
+                    macro = semantic_agg["macro"]
                     complete = agg["semantic_complete"]
                     on_progress(
                         f"[eval] semantic {done}/{len(pending)} 完成 "
                         f"(累计 {complete}/{total_pairs}): "
-                        f"C={micro['consistency']:.1%} P={micro['precision']:.1%} "
-                        f"R={micro['recall']:.1%}"
+                        f"C={macro['consistency']:.1%} P={macro['precision']:.1%} "
+                        f"R={macro['recall']:.1%}"
                     )
 
     await asyncio.gather(*(_judge_one(pair) for pair in pending))

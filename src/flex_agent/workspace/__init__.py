@@ -296,7 +296,21 @@ class Workspace:
     def _strip_eval_per_text(section: dict[str, Any] | None) -> dict[str, Any] | None:
         if section is None:
             return None
-        return {key: value for key, value in section.items() if key != "per_text"}
+        summary_keys = {
+            "common_texts",
+            "skipped_human_only",
+            "skipped_agent_only",
+            "nums_llm_only",
+            "nums_human_only",
+            "nums_both",
+            "macro",
+            "alignment",
+        }
+        return {
+            key: value
+            for key, value in section.items()
+            if key in summary_keys
+        }
 
     @staticmethod
     def _merge_eval_per_text(payload: dict[str, Any]) -> dict[int, dict[str, Any]]:

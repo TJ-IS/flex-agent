@@ -67,14 +67,14 @@ class ComputeItemMetricsSimpleTests(unittest.TestCase):
         human = {1: {"画面": 1, "态度": 1}}
         agent = {1: {"画面": 1, "态度": 1}}
         result = compute_item_metrics_simple(human, agent)
-        self.assertEqual(result["micro"]["consistency"], 1.0)
+        self.assertEqual(result["macro"]["consistency"], 1.0)
 
     def test_partial_overlap(self) -> None:
         human = {1: {"画面": 1, "态度": 1, "趣味性": 1}}
         agent = {1: {"画面": 1, "价格": 1}}
         result = compute_item_metrics_simple(human, agent)
-        self.assertEqual(result["micro"]["n_intersection"], 1)
-        self.assertEqual(result["micro"]["consistency"], 0.25)
+        self.assertEqual(result["macro"]["n_intersection"], 1)
+        self.assertEqual(result["macro"]["consistency"], 0.25)
 
 
 class EvalPromptTests(unittest.TestCase):
@@ -183,14 +183,14 @@ class PartialSemanticMetricsTests(unittest.TestCase):
         }
         partial = _aggregate_semantic_metrics(entries[:1], {1: alignments[1]})
         self.assertEqual(partial["common_texts"], 1)
-        self.assertEqual(partial["micro"]["n_intersection"], 1)
+        self.assertEqual(partial["macro"]["n_intersection"], 1)
 
         missing = _aggregate_semantic_metrics(entries[:1], {})
-        self.assertEqual(missing["micro"]["n_intersection"], 0)
+        self.assertEqual(missing["macro"]["n_intersection"], 0)
 
         full = _aggregate_semantic_metrics(entries, alignments)
         self.assertEqual(full["common_texts"], 2)
-        self.assertEqual(full["micro"]["n_intersection"], 2)
+        self.assertEqual(full["macro"]["n_intersection"], 2)
 
 
 class EvaluateWorkspaceTests(unittest.TestCase):
@@ -310,7 +310,7 @@ class AggregateEvalResultsTests(unittest.TestCase):
 
             agg = aggregate_eval_results(eval_dir)
             self.assertEqual(agg["keyword_complete"], 1)
-            self.assertEqual(agg["item_level_keyword"]["micro"]["consistency"], 1.0)
+            self.assertEqual(agg["item_level_keyword"]["macro"]["consistency"], 1.0)
 
 
 class JudgeKeywordTests(unittest.TestCase):
@@ -475,10 +475,10 @@ class SemanticMetricsTests(unittest.TestCase):
             from flex_agent.eval.aggregate import aggregate_eval_results
 
             agg = aggregate_eval_results(eval_dir)
-            micro = agg["item_level_semantic"]["micro"]
-            self.assertEqual(micro["n_intersection"], 1)
-            self.assertEqual(micro["recall"], 1.0)
-            self.assertAlmostEqual(micro["consistency"], 1 / 3, places=3)
+            macro = agg["item_level_semantic"]["macro"]
+            self.assertEqual(macro["n_intersection"], 1)
+            self.assertEqual(macro["recall"], 1.0)
+            self.assertAlmostEqual(macro["consistency"], 1 / 3, places=3)
 
 
 class MetricsOnlyEvalTests(unittest.TestCase):

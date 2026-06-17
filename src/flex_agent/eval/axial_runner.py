@@ -210,12 +210,12 @@ def evaluate_axial_workspace(
         _emit_progress(on_progress, "[eval:axial] keyword 全局评测...")
         keyword = judge_axial_global_keyword(ctx, agent_dims=agent_dims)
         global_payload["keyword"] = keyword
-        micro = keyword
+        metrics = keyword
         _emit_progress(
             on_progress,
             (
-                f"[eval:axial] keyword: C={micro['consistency']:.1%} "
-                f"P={micro['precision']:.1%} R={micro['recall']:.1%}"
+                f"[eval:axial] keyword: C={metrics['consistency']:.1%} "
+                f"P={metrics['precision']:.1%} R={metrics['recall']:.1%}"
             ),
         )
     elif resume and existing.get("keyword"):

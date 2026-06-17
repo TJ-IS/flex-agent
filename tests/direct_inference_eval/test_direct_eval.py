@@ -99,19 +99,19 @@ class OpenMetricsTests(unittest.TestCase):
             )
         }
         result = evaluate_open(records, predictions)
-        micro = result["item_level_keyword"]["micro"]
-        self.assertEqual(micro["n_intersection"], 1)
-        self.assertEqual(micro["n_agent"], 2)
-        self.assertEqual(micro["n_human"], 3)
-        self.assertEqual(micro["consistency"], 0.25)
-        self.assertEqual(micro["precision"], 0.5)
-        self.assertAlmostEqual(micro["recall"], 0.3333, places=4)
+        macro = result["item_level_keyword"]["macro"]
+        self.assertEqual(macro["n_intersection"], 1)
+        self.assertEqual(macro["n_agent"], 2)
+        self.assertEqual(macro["n_human"], 3)
+        self.assertAlmostEqual(macro["consistency"], 0.1666, places=4)
+        self.assertEqual(macro["precision"], 0.25)
+        self.assertEqual(macro["recall"], 0.25)
 
     def test_perfect_match(self) -> None:
         records = [HumanRecord(1, "画面好", {"画面": 1}, {"sensory appeal"})]
         predictions = {1: PredictionRecord(1, [PredictionItem("画面好", "视觉效果", "沉浸体验")])}
         result = evaluate_open(records, predictions)
-        self.assertEqual(result["item_level_keyword"]["micro"]["consistency"], 1.0)
+        self.assertEqual(result["item_level_keyword"]["macro"]["consistency"], 1.0)
 
 
 class AxialMetricsTests(unittest.TestCase):
@@ -127,10 +127,10 @@ class AxialMetricsTests(unittest.TestCase):
             )
         }
         result = evaluate_axial(predictions)
-        micro = result["item_level_keyword"]["micro"]
-        self.assertEqual(micro["n_intersection"], 2)
-        self.assertEqual(micro["n_agent"], 3)
-        self.assertEqual(micro["n_human"], 7)
+        macro = result["item_level_keyword"]["macro"]
+        self.assertEqual(macro["n_intersection"], 2)
+        self.assertEqual(macro["n_agent"], 3)
+        self.assertEqual(macro["n_human"], 7)
 
 
 class PipelineOutputTests(unittest.TestCase):
@@ -194,7 +194,7 @@ class PipelineOutputTests(unittest.TestCase):
             open_summary = json.loads((root / "run" / "eval" / "open" / "summary.json").read_text(encoding="utf-8"))
             axial_global = json.loads((root / "run" / "eval" / "axial" / "global.json").read_text(encoding="utf-8"))
             self.assertEqual(open_summary["eval_kind"], "open")
-            self.assertEqual(open_summary["item_level_keyword"]["micro"]["precision"], 1.0)
+            self.assertEqual(open_summary["item_level_keyword"]["macro"]["precision"], 1.0)
             self.assertIn("keyword", axial_global)
 
 

@@ -19,14 +19,14 @@ class EvalStoreTests(unittest.TestCase):
                 payload={
                     "mode": "both",
                     "item_level_keyword": {
-                        "micro": {"consistency": 1.0},
+                        "macro": {"consistency": 1.0},
                         "per_text": [
                             {"text_id": 1, "consistency": 1.0},
                             {"text_id": 2, "consistency": 0.5},
                         ],
                     },
                     "item_level_semantic": {
-                        "micro": {"consistency": 0.8},
+                        "macro": {"consistency": 0.8},
                         "per_text": [{"text_id": 1, "consistency": 0.8}],
                     },
                 },

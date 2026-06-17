@@ -214,6 +214,8 @@ class WorkspaceTests(unittest.TestCase):
                 ],
             )
             ws.save_coding(finished)
+            saved = json.loads(ws.coding_path(1).read_text(encoding="utf-8"))
+            self.assertNotIn("labels", saved["items"][0])
             loaded = ws.load_coding(1)
             self.assertIsNotNone(loaded)
             assert loaded is not None
@@ -258,6 +260,10 @@ class ExportTests(unittest.TestCase):
             self.assertEqual(payload["meta"]["dimensions"], 1)
             self.assertEqual(len(payload["state"]["finished_texts"]), 1)
             self.assertEqual(len(payload["state"]["dimensions"]), 1)
+            self.assertNotIn(
+                "labels",
+                payload["state"]["finished_texts"][0]["items"][0],
+            )
 
 
 class QualitySmokeTests(unittest.TestCase):

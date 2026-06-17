@@ -263,7 +263,7 @@ class EvaluateAxialWorkspaceTests(unittest.TestCase):
         }
         agg = aggregate_axial_global_payload(payload)
         self.assertEqual(agg["keyword_complete"], 1)
-        self.assertEqual(agg["item_level_keyword"]["micro"]["consistency"], 1.0)
+        self.assertEqual(agg["item_level_keyword"]["macro"]["consistency"], 1.0)
 
     def test_load_axial_eval_pairs_still_available_for_diagnostics(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
