@@ -44,7 +44,7 @@ class BatchBobInput(BaseModel):
         default=None,
         description="Optional explicit text ids. Defaults to all texts in queue.",
     )
-    concurrency_limit: int = Field(default=50, description="Max concurrent Bob calls.")
+    concurrency_limit: int = Field(default=10, description="Max concurrent Bob calls.")
 
 
 class KevinBatchInput(BaseModel):
@@ -55,6 +55,14 @@ class KevinBatchInput(BaseModel):
 
 
 class ExportInput(BaseModel):
+    pass
+
+
+class AliceCodebookInput(BaseModel):
+    pass
+
+
+class WorkspaceStatusInput(BaseModel):
     pass
 
 
@@ -381,6 +389,7 @@ def build_coding_tools(ctx: CodingToolContext) -> list[StructuredTool]:
             coroutine=run_alice_codebook,
             name="run_alice_codebook",
             description=descriptions["run_alice_codebook"],
+            args_schema=AliceCodebookInput,
         ),
         StructuredTool.from_function(
             coroutine=run_kevin_batches,
@@ -398,6 +407,7 @@ def build_coding_tools(ctx: CodingToolContext) -> list[StructuredTool]:
             coroutine=workspace_status,
             name="workspace_status",
             description=descriptions["workspace_status"],
+            args_schema=WorkspaceStatusInput,
         ),
     ]
 

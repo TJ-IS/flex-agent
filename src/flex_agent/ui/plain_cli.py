@@ -12,9 +12,13 @@ from flex_agent.orchestration import create_flex_agent
 from flex_agent.config import (
     PROJECT_ROOT,
     load_env_file,
+    load_recursion_limit,
+    merge_invoke_config,
     path_label,
     set_prompts_dir,
     set_workspace_dir,
+    trace_invoke_config,
+    warn_langsmith_tracing,
 )
 from flex_agent.i18n import get_bundle, set_language
 from flex_agent.models import SessionMeta
@@ -154,6 +158,7 @@ async def run_plain_cli(
     language_spec: str | None = None,
 ) -> int:
     load_env_file(PROJECT_ROOT / ".env")
+    warn_langsmith_tracing()
     active_language = set_language(language_spec)
     prompts_dir = set_prompts_dir(prompts_dir_spec, language=active_language)
     workspace_dir = set_workspace_dir(workspace_spec)
@@ -175,7 +180,13 @@ async def run_plain_cli(
     renderer = PlainCliRenderer()
 
     thread_id = f"flex_agent_{strftime('%Y%m%d_%H%M%S')}"
-    config = {"configurable": {"thread_id": thread_id}}
+    config = merge_invoke_config(
+        {
+            "configurable": {"thread_id": thread_id},
+            "recursion_limit": load_recursion_limit(),
+        },
+        trace_invoke_config("orchestrator"),
+    )
 
     renderer.render_banner(workspace)
 

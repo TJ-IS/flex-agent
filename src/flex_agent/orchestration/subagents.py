@@ -13,10 +13,6 @@ SUBAGENT_DENY_PRIVATE = [
     ),
 ]
 
-PRIVATE_ACCESS_NOTE = get_bundle("zh").llm.private_access_note
-BOB_WORKSPACE_SCHEMA_NOTE = get_bundle("zh").llm.bob_workspace_schema_note
-CODEBOOK_WORKSPACE_SCHEMA_NOTE = get_bundle("zh").llm.codebook_workspace_schema_note
-
 
 def build_subagents(prompt_ctx: PromptContext | None = None, *, language: str | None = None) -> list[dict]:
     ctx = prompt_ctx or PromptContext.load()

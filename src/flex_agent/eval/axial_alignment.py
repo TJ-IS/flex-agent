@@ -12,8 +12,10 @@ from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field, create_model
 
 from flex_agent.eval.axial_core import enforce_one_to_one_alignment, normalize_category
+from flex_agent.eval.async_utils import run_async
 from flex_agent.eval.prompts import axial_category_alignment_prompt
 from flex_agent.i18n import Language, get_bundle, get_language, resolve_language
+from flex_agent.llm.structured_output import ainvoke_structured
 
 
 class AxialSemanticMatch(BaseModel):
@@ -57,7 +59,7 @@ def _get_batch_axial_semantic_alignment_model(active_language: Language) -> type
     )
 
 
-def build_axial_semantic_alignment_for_texts(
+async def abuild_axial_semantic_alignment_for_texts(
     text_batch: list[dict[str, Any]],
     llm: BaseChatModel,
     *,
@@ -78,9 +80,12 @@ def build_axial_semantic_alignment_for_texts(
     try:
         prompt = ChatPromptTemplate.from_messages([("human", axial_category_alignment_prompt())])
         schema = get_batch_axial_semantic_alignment_model(language)
-        chain = prompt | llm.with_structured_output(schema, method="json_schema")
-        result: BatchAxialSemanticAlignment = chain.invoke(
-            {"texts_json": json.dumps(prompt_rows, ensure_ascii=False)}
+        result = await ainvoke_structured(
+            llm,
+            prompt,
+            schema,
+            {"texts_json": json.dumps(prompt_rows, ensure_ascii=False)},
+            component="eval-axial-semantic",
         )
     except Exception as exc:
         print(get_bundle(language).llm.eval_semantic_warning.format(error=exc), file=sys.stderr)
@@ -114,3 +119,14 @@ def build_axial_semantic_alignment_for_texts(
         )
         validated[int(text.text_id)] = matches
     return validated
+
+
+def build_axial_semantic_alignment_for_texts(
+    text_batch: list[dict[str, Any]],
+    llm: BaseChatModel,
+    *,
+    language: str | None = None,
+) -> dict[int, dict[str, str | None]]:
+    return run_async(
+        abuild_axial_semantic_alignment_for_texts(text_batch, llm, language=language)
+    )

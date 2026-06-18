@@ -14,6 +14,7 @@ from flex_agent.orchestration.tools import CodingToolContext, build_coding_tools
 from flex_agent.workspace import Workspace
 
 _HARNESS_REGISTERED = False
+_CHECKPOINTER = MemorySaver()
 
 
 def _ensure_flex_harness_profile() -> None:
@@ -66,6 +67,6 @@ def create_flex_agent(
         system_prompt=orchestrator_prompt(ctx.language),
         subagents=build_subagents(ctx.prompt_ctx, language=ctx.language),
         backend=build_backend(workspace),
-        checkpointer=MemorySaver(),
+        checkpointer=_CHECKPOINTER,
         name="flex-agent-orchestrator",
     )

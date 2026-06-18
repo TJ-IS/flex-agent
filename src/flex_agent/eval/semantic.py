@@ -8,7 +8,9 @@ from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
 from flex_agent.eval.prompts import dimension_name_alignment_prompt
+from flex_agent.eval.async_utils import run_async
 from flex_agent.i18n import get_bundle
+from flex_agent.llm.structured_output import ainvoke_structured
 
 
 def apply_semantic_alignment(
@@ -35,7 +37,7 @@ def apply_semantic_alignment(
     return result
 
 
-def build_dimension_name_alignment(
+async def abuild_dimension_name_alignment(
     agent_dimensions: list[str],
     human_dimensions: list[str],
     llm: BaseChatModel,
@@ -56,10 +58,15 @@ def build_dimension_name_alignment(
         )
 
     chat_prompt = ChatPromptTemplate.from_messages([("human", prompt)])
-    chain = chat_prompt | llm.with_structured_output(AlignmentResult, method="json_schema")
 
     try:
-        result = chain.invoke({})
+        result = await ainvoke_structured(
+            llm,
+            chat_prompt,
+            AlignmentResult,
+            {},
+            component="eval-dimension-alignment",
+        )
         validated: dict[str, str | None] = {}
         for agent_dim, human_dim in result.mapping.items():
             if agent_dim not in agent_dimensions:
@@ -77,3 +84,13 @@ def build_dimension_name_alignment(
             file=sys.stderr,
         )
         return {}
+
+
+def build_dimension_name_alignment(
+    agent_dimensions: list[str],
+    human_dimensions: list[str],
+    llm: BaseChatModel,
+) -> dict[str, str | None]:
+    return run_async(
+        abuild_dimension_name_alignment(agent_dimensions, human_dimensions, llm)
+    )

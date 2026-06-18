@@ -12,9 +12,11 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field, create_model
 
+from flex_agent.eval.async_utils import run_async
 from flex_agent.eval.core import EvalMetrics, micro_from_counts, normalize_dimension
 from flex_agent.eval.prompts import text_alignment_prompt
 from flex_agent.i18n import Language, get_bundle, get_language, resolve_language
+from flex_agent.llm.structured_output import ainvoke_structured
 
 _DEFAULT_SCHEMA_DESCRIPTIONS = get_bundle("zh").llm.schema_descriptions
 
@@ -197,7 +199,7 @@ def _human_from_react_action(action: str, human_dims: set[str]) -> str | None:
     return candidate if candidate in human_dims else None
 
 
-def build_semantic_alignment_for_texts(
+async def abuild_semantic_alignment_for_texts(
     text_batch: list[dict[str, Any]],
     llm: BaseChatModel,
     *,
@@ -216,8 +218,13 @@ def build_semantic_alignment_for_texts(
     try:
         prompt = ChatPromptTemplate.from_messages([("human", text_alignment_prompt())])
         schema = get_batch_semantic_alignment_model(language)
-        chain = prompt | llm.with_structured_output(schema, method="json_schema")
-        result = chain.invoke({"texts_json": json.dumps(prompt_rows, ensure_ascii=False)})
+        result = await ainvoke_structured(
+            llm,
+            prompt,
+            schema,
+            {"texts_json": json.dumps(prompt_rows, ensure_ascii=False)},
+            component="eval-semantic",
+        )
     except Exception as exc:
         print(get_bundle(language).llm.eval_semantic_warning.format(error=exc), file=sys.stderr)
         return {}
@@ -247,3 +254,14 @@ def build_semantic_alignment_for_texts(
             matches[agent_dim] = human_dim
         validated[int(text.text_id)] = matches
     return validated
+
+
+def build_semantic_alignment_for_texts(
+    text_batch: list[dict[str, Any]],
+    llm: BaseChatModel,
+    *,
+    language: str | None = None,
+) -> dict[int, dict[str, str | None]]:
+    return run_async(
+        abuild_semantic_alignment_for_texts(text_batch, llm, language=language)
+    )

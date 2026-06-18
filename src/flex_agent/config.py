@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 from langchain_openai import ChatOpenAI
@@ -114,6 +116,34 @@ def load_env_file(path: Path | None = None) -> None:
             os.environ[key] = value
 
 
+def warn_langsmith_tracing() -> None:
+    """Hint when LangSmith credentials exist but tracing is off."""
+    api_key = os.getenv("LANGSMITH_API_KEY", "").strip()
+    if not api_key or api_key.startswith("<"):
+        return
+    tracing = os.getenv("LANGSMITH_TRACING", "").strip().lower()
+    if tracing in {"true", "1", "yes", "on"}:
+        return
+    print(
+        "Note: LANGSMITH_API_KEY is set but LANGSMITH_TRACING is not enabled. "
+        "Set LANGSMITH_TRACING=true to send traces to LangSmith.",
+        file=sys.stderr,
+    )
+
+
+def load_recursion_limit(default: int = 50) -> int:
+    raw = os.getenv("FLEX_AGENT_RECURSION_LIMIT", str(default)).strip()
+    try:
+        limit = int(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"FLEX_AGENT_RECURSION_LIMIT must be an integer, got {raw!r}."
+        ) from exc
+    if limit < 1:
+        raise ValueError("FLEX_AGENT_RECURSION_LIMIT must be at least 1.")
+    return limit
+
+
 @dataclass(frozen=True)
 class ModelConfig:
     default_model: str
@@ -139,12 +169,13 @@ def load_model_config(
     )
 
 
-def build_llm(
+@lru_cache(maxsize=16)
+def _build_llm_cached(
     model_name: str,
-    *,
-    timeout: float = 300.0,
-    max_retries: int = 5,
-    seed: int | None = None,
+    timeout: float,
+    max_retries: int,
+    seed: int | None,
+    base_url: str | None,
 ) -> ChatOpenAI:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -162,7 +193,45 @@ def build_llm(
     }
     if seed is not None:
         kwargs["seed"] = seed
-    base_url = os.getenv("OPENAI_BASE_URL")
     if base_url:
         kwargs["base_url"] = base_url
     return ChatOpenAI(**kwargs)
+
+
+def build_llm(
+    model_name: str,
+    *,
+    timeout: float = 300.0,
+    max_retries: int = 5,
+    seed: int | None = None,
+) -> ChatOpenAI:
+    if seed is None:
+        seed_raw = os.getenv("OPENAI_SEED", "42").strip()
+        seed = int(seed_raw) if seed_raw else None
+    base_url = os.getenv("OPENAI_BASE_URL") or None
+    return _build_llm_cached(model_name, timeout, max_retries, seed, base_url)
+
+
+def trace_invoke_config(component: str | None = None) -> dict[str, object]:
+    """LangSmith tags/metadata for LLM invocations (not for create_deep_agent model arg)."""
+    if not component:
+        return {}
+    tracing = os.getenv("LANGSMITH_TRACING", "").strip().lower()
+    if tracing not in {"true", "1", "yes", "on"}:
+        return {}
+    return {"tags": [component], "metadata": {"component": component}}
+
+
+def merge_invoke_config(*configs: dict[str, object] | None) -> dict[str, object]:
+    merged: dict[str, object] = {}
+    for config in configs:
+        if not config:
+            continue
+        for key, value in config.items():
+            if key == "tags" and key in merged:
+                merged[key] = [*merged[key], *value]  # type: ignore[list-item]
+            elif key == "metadata" and key in merged:
+                merged[key] = {**merged[key], **value}  # type: ignore[dict-item]
+            else:
+                merged[key] = value
+    return merged

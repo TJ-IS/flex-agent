@@ -1,73 +1,22 @@
 from __future__ import annotations
 
 import json
-import re
 import time
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, List, Type, TypeVar, cast
+from typing import Any, List, Type, TypeVar
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import BaseMessage
-from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field, create_model
 
 from flex_agent.i18n import Language, get_bundle, get_language, resolve_language
+from flex_agent.llm.structured_output import ainvoke_structured
 from flex_agent.models import DimensionDetail, TextItem
 from flex_agent.prompts.loader import read_prompt_file
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
-
-
-def _extract_json_object(raw_text: str) -> str:
-    cleaned = raw_text.strip()
-    if cleaned.startswith("```"):
-        cleaned = re.sub(r"^```[a-zA-Z0-9_-]*\s*", "", cleaned)
-        cleaned = re.sub(r"\s*```$", "", cleaned)
-        cleaned = cleaned.strip()
-    if cleaned.startswith("{") and cleaned.endswith("}"):
-        return cleaned
-    match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
-    if match:
-        return match.group(0)
-    raise ValueError("Model response does not contain a JSON object.")
-
-
-def _raw_result_to_content(result: Any) -> tuple[str, BaseMessage | None]:
-    if isinstance(result, BaseMessage):
-        content = result.content
-        if isinstance(content, str):
-            return content, result
-        return json.dumps(content, ensure_ascii=False, default=str), result
-    if isinstance(result, str):
-        return result, None
-    return str(result), None
-
-
-async def ainvoke_structured(
-    llm: BaseChatModel,
-    prompt: ChatPromptTemplate,
-    schema: Type[ModelT],
-    payload: dict,
-) -> ModelT:
-    parser = PydanticOutputParser(pydantic_object=schema)
-    invoke_payload = dict(payload)
-    invoke_payload["format_instructions"] = parser.get_format_instructions()
-    chain = prompt | llm
-    result = await chain.ainvoke(invoke_payload)
-    raw_content, _ = _raw_result_to_content(result)
-    try:
-        return cast(ModelT, parser.parse(raw_content))
-    except Exception as exc:
-        try:
-            json_str = _extract_json_object(raw_content)
-            return schema.model_validate(json.loads(json_str))
-        except Exception as fallback_exc:
-            raise RuntimeError(
-                f"Structured output parsing failed for {schema.__name__}: {exc}; fallback: {fallback_exc}"
-            ) from fallback_exc
 
 
 class PromptContext(BaseModel):
@@ -241,7 +190,7 @@ async def arun_bob(
     schema = get_agent_schema_models(prompt_ctx.language).bob_output
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", prompt_ctx.bob_template + "\n\n{format_instructions}"),
+            ("system", prompt_ctx.bob_template),
             ("human", "text_id: {text_id}\ncontent: {content}"),
         ]
     )
@@ -250,6 +199,7 @@ async def arun_bob(
         prompt=prompt,
         schema=schema,
         payload={"text_id": text.id, "content": text.content},
+        component="coding-default",
     )
     return BobOutput.model_validate(parsed.model_dump())
 
@@ -270,11 +220,17 @@ async def arun_alice(
 
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", prompt_ctx.alice_template + "\n\n{format_instructions}"),
+            ("system", prompt_ctx.alice_template),
             ("human", human_content),
         ]
     )
-    parsed = await ainvoke_structured(llm=llm, prompt=prompt, schema=schema, payload=payload)
+    parsed = await ainvoke_structured(
+        llm=llm,
+        prompt=prompt,
+        schema=schema,
+        payload=payload,
+        component="coding-pro",
+    )
     return AliceOutput.model_validate(parsed.model_dump())
 
 
@@ -307,9 +263,15 @@ async def arun_kevin(
 
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", prompt_ctx.kevin_template + "\n\n{format_instructions}"),
+            ("system", prompt_ctx.kevin_template),
             ("human", human_content),
         ]
     )
-    parsed = await ainvoke_structured(llm=llm, prompt=prompt, schema=schema, payload=payload)
+    parsed = await ainvoke_structured(
+        llm=llm,
+        prompt=prompt,
+        schema=schema,
+        payload=payload,
+        component="coding-pro",
+    )
     return KevinOutput.model_validate(parsed.model_dump())
