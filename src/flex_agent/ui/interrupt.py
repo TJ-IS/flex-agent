@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import select
 import sys
-import termios
 import threading
-import tty
+
+if sys.platform != "win32":
+    import select
+    import termios
+    import tty
 
 
 class EscInterruptWatcher:
