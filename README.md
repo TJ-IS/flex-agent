@@ -22,3 +22,5 @@ uv run flex-agent --workspace exp-v2
 uv run flex-agent --prompts-dir exp-v2 --workspace exp-v2
 uv run flex-agent --debug
 ```
+
+`--debug` writes graph and tool-call diagnostics to `.cursor/flex-agent-debug-<timestamp>.ndjson`.
