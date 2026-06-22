@@ -6,7 +6,7 @@
 
 ## 背景
 
-本评估用于 workspace 级 codebook 比较：Agent 侧是 Alice/Kevin 归纳的高阶维度（含 definition 与 items）；人工侧是 benchmark 中的英文 category（如 `interactive service`、`sensory appeal`）。
+本评估用于 workspace 级 codebook 比较：Agent 侧是 Inducing/AxialCoding 归纳的高阶维度（含 definition 与 items）；人工侧是 benchmark 中的英文 category（如 `interactive service`、`sensory appeal`）。
 
 ## 输入
 

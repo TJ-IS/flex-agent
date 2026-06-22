@@ -9,18 +9,30 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field, create_model
 
-from flex_agent.coding.agents import PromptContext, arun_alice, arun_bob, arun_kevin
+from flex_agent.coding.agents import (
+    PromptContext,
+    arun_axial_coding,
+    arun_induction,
+    arun_open_coding,
+)
 from flex_agent.coding.export import export_open_coding_result
 from flex_agent.coding.quality import (
     QualityWarnings,
     extract_item_details,
     extract_item_pool,
     normalize_finished_text,
-    review_dimensions,
 )
 from flex_agent.config import build_llm, get_prompts_dir, load_model_config, path_label
 from flex_agent.i18n import Language, get_bundle, get_language, resolve_language
 from flex_agent.models import DimensionDetail, FinishedItemDetail, FinishedTextItem
+from flex_agent.orchestration.harness import (
+    decode_workspace_status,
+    encode_codebook_batch,
+    encode_coding_result,
+    encode_dimensions,
+    monitor_update_batches,
+    verify_dimensions,
+)
 from flex_agent.workspace import Workspace
 
 
@@ -32,25 +44,25 @@ class InitRunInput(BaseModel):
         ),
     )
     max_nums: int = Field(default=10, description="Maximum number of texts to process.")
-    codebook_nums: int = Field(default=5, description="Number of texts for Alice codebook sample.")
-    kevin_batch_size: int = Field(default=5, description="Kevin batch size.")
+    codebook_nums: int = Field(default=5, description="Number of texts for the Inducing seed pool.")
+    kevin_batch_size: int = Field(default=5, description="AxialCoding update-pool batch size.")
     sample_mode: str = Field(default="sequential", description="sequential or random sampling.")
     random_seed: int | None = Field(default=None, description="Random seed for sampling/partition.")
     open_mode: str = Field(default="pure", description="Open coding mode label for export metadata.")
 
 
-class BatchBobInput(BaseModel):
+class BatchOpenCodingInput(BaseModel):
     text_ids: list[int] | None = Field(
         default=None,
         description="Optional explicit text ids. Defaults to all texts in queue.",
     )
-    concurrency_limit: int = Field(default=10, description="Max concurrent Bob calls.")
+    concurrency_limit: int = Field(default=10, description="Max concurrent OpenCoding calls.")
 
 
-class KevinBatchInput(BaseModel):
+class AxialCodingBatchInput(BaseModel):
     batch_index: int | None = Field(
         default=None,
-        description="1-based Kevin batch index. If omitted, runs all Kevin batches sequentially.",
+        description="1-based AxialCoding batch index. If omitted, runs all batches sequentially.",
     )
 
 
@@ -58,7 +70,7 @@ class ExportInput(BaseModel):
     pass
 
 
-class AliceCodebookInput(BaseModel):
+class ConstructInductionInput(BaseModel):
     pass
 
 
@@ -66,11 +78,24 @@ class WorkspaceStatusInput(BaseModel):
     pass
 
 
+BatchBobInput = BatchOpenCodingInput
+KevinBatchInput = AxialCodingBatchInput
+AliceCodebookInput = ConstructInductionInput
+
+
 @dataclass(frozen=True)
 class ToolInputSchemas:
     init_run: type[BaseModel]
-    batch_bob: type[BaseModel]
-    kevin_batch: type[BaseModel]
+    batch_open_coding: type[BaseModel]
+    axial_coding_batch: type[BaseModel]
+
+    @property
+    def batch_bob(self) -> type[BaseModel]:
+        return self.batch_open_coding
+
+    @property
+    def kevin_batch(self) -> type[BaseModel]:
+        return self.axial_coding_batch
 
 
 def _tool_input_schemas(language: str | None = None) -> ToolInputSchemas:
@@ -86,22 +111,26 @@ def _tool_input_schemas(language: str | None = None) -> ToolInputSchemas:
         random_seed=(int | None, Field(default=None, description=descriptions["random_seed"])),
         open_mode=(str, Field(default="pure", description=descriptions["open_mode"])),
     )
-    batch_bob = create_model(
-        f"BatchBobInput{suffix}",
+    batch_open_coding = create_model(
+        f"BatchOpenCodingInput{suffix}",
         text_ids=(list[int] | None, Field(default=None, description=descriptions["text_ids"])),
         concurrency_limit=(int, Field(default=10, description=descriptions["concurrency_limit"])),
     )
-    kevin_batch = create_model(
-        f"KevinBatchInput{suffix}",
+    axial_coding_batch = create_model(
+        f"AxialCodingBatchInput{suffix}",
         batch_index=(int | None, Field(default=None, description=descriptions["batch_index"])),
     )
-    return ToolInputSchemas(init_run=init_run, batch_bob=batch_bob, kevin_batch=kevin_batch)
+    return ToolInputSchemas(
+        init_run=init_run,
+        batch_open_coding=batch_open_coding,
+        axial_coding_batch=axial_coding_batch,
+    )
 
 
 ProgressCallback = Callable[[str], None]
 
 
-def _default_bob_progress(message: str) -> None:
+def _default_open_coding_progress(message: str) -> None:
     print(message, file=sys.stderr, flush=True)
 
 
@@ -114,12 +143,7 @@ class CodingToolContext:
     prompts_dir_label: str
     workspace_dir_label: str
     language: Language = "zh"
-    on_progress: ProgressCallback | None = _default_bob_progress
-
-
-def _chunked(ids: list[int], size: int) -> list[list[int]]:
-    chunk_size = max(1, size)
-    return [ids[idx : idx + chunk_size] for idx in range(0, len(ids), chunk_size)]
+    on_progress: ProgressCallback | None = _default_open_coding_progress
 
 
 def _tool_error(tool_name: str, exc: BaseException) -> str:
@@ -156,13 +180,13 @@ def build_coding_tools(ctx: CodingToolContext) -> list[StructuredTool]:
             partition = ctx.workspace.load_partition()
             return progress.initialized_run.format(
                 max_nums=meta.max_nums,
-                codebook=len(partition.codebook_text_ids),
-                kevin=len(partition.kevin_text_ids),
+                codebook=len(partition.seed_text_ids),
+                update=len(partition.update_text_ids),
             )
         except Exception as exc:
             return _tool_error("init_open_coding_run", exc)
 
-    async def batch_bob_code(
+    async def batch_open_coding(
         text_ids: list[int] | None = None,
         concurrency_limit: int = 10,
     ) -> str:
@@ -183,7 +207,7 @@ def build_coding_tools(ctx: CodingToolContext) -> list[StructuredTool]:
             if ctx.on_progress is not None:
                 ctx.on_progress(message)
 
-        _emit(progress.bob_start.format(total=total, limit=limit))
+        _emit(progress.open_coding_start.format(total=total, limit=limit))
 
         async def _record_skip(text_id: int, *, note: str | None = None) -> None:
             async with lock:
@@ -191,7 +215,7 @@ def build_coding_tools(ctx: CodingToolContext) -> list[StructuredTool]:
                 if note is not None:
                     warnings.notes.append(note)
                 done = coded + len(skipped)
-                _emit(progress.bob_skip.format(text_id=text_id, done=done, total=total))
+                _emit(progress.open_coding_skip.format(text_id=text_id, done=done, total=total))
 
         async def _code_one(text_id: int) -> None:
             nonlocal coded
@@ -201,11 +225,11 @@ def build_coding_tools(ctx: CodingToolContext) -> list[StructuredTool]:
                 return
             async with sem:
                 try:
-                    output = await arun_bob(ctx.llm, ctx.prompt_ctx, text)
+                    output = await arun_open_coding(ctx.llm, ctx.prompt_ctx, text)
                 except Exception as exc:
                     await _record_skip(
                         text_id,
-                        note=f"bob skipped text_id={text_id}: {exc!r}",
+                        note=f"OpenCoding skipped text_id={text_id}: {exc!r}",
                     )
                     return
 
@@ -225,12 +249,12 @@ def build_coding_tools(ctx: CodingToolContext) -> list[StructuredTool]:
             )
             normalized, item_warnings = normalize_finished_text(finished)
             warnings.add(item_warnings)
-            ctx.workspace.save_coding(normalized)
+            encode_coding_result(ctx.workspace, normalized)
             async with lock:
                 coded += 1
                 done = coded + len(skipped)
                 _emit(
-                    progress.bob_done.format(
+                    progress.open_coding_done.format(
                         text_id=text_id,
                         done=done,
                         total=total,
@@ -242,65 +266,75 @@ def build_coding_tools(ctx: CodingToolContext) -> list[StructuredTool]:
         remaining = [text_id for text_id in ctx.workspace.load_queue() if text_id not in ctx.workspace.list_coded_ids()]
         ctx.workspace.save_queue(remaining)
         ctx.workspace.merge_warnings(warnings.as_dict())
-        return progress.bob_summary.format(
+        return progress.open_coding_summary.format(
             coded=coded,
             total=len(target_ids),
             skipped=skipped,
             remaining=len(remaining),
         )
 
-    async def run_alice_codebook() -> str:
+    async def batch_bob_code(
+        text_ids: list[int] | None = None,
+        concurrency_limit: int = 10,
+    ) -> str:
+        return await batch_open_coding(text_ids=text_ids, concurrency_limit=concurrency_limit)
+
+    async def run_construct_induction() -> str:
         partition = ctx.workspace.load_partition()
         finished = [
             item
             for item in ctx.workspace.load_finished_texts()
-            if item.id in set(partition.codebook_text_ids)
+            if item.id in set(partition.seed_text_ids)
         ]
         items_pool = extract_item_pool(finished)
         if not items_pool:
-            ctx.workspace.save_dimensions([])
-            return progress.alice_empty_pool
+            encode_dimensions(ctx.workspace, [])
+            return progress.induction_empty_pool
 
         items_details = extract_item_details(finished)
         try:
-            alice_output = await arun_alice(
+            induction_output = await arun_induction(
                 ctx.llm_pro,
                 ctx.prompt_ctx,
                 items_pool,
                 items_details=items_details,
             )
         except Exception as exc:
-            return _tool_error("run_alice_codebook", exc)
+            return _tool_error("run_construct_induction", exc)
 
         candidate = [
             DimensionDetail(name=item.name, items=list(item.items), definition=item.definition)
-            for item in alice_output.dimensions
+            for item in induction_output.dimensions
             if item.items
         ]
         if not candidate:
             return _tool_error(
-                "run_alice_codebook",
-                RuntimeError("Alice returned no non-empty dimensions."),
+                "run_construct_induction",
+                RuntimeError("Inducing returned no non-empty dimensions."),
             )
 
-        reviewed, review_warnings = review_dimensions(candidate, finished)
-        ctx.workspace.save_dimensions(reviewed)
+        reviewed, review_warnings = verify_dimensions(candidate, finished)
+        encode_dimensions(ctx.workspace, reviewed)
         ctx.workspace.merge_warnings(review_warnings.as_dict())
-        return progress.alice_written.format(count=len(reviewed))
+        return progress.induction_written.format(count=len(reviewed))
 
-    async def run_kevin_batches(batch_index: int | None = None) -> str:
+    async def run_alice_codebook() -> str:
+        return await run_construct_induction()
+
+    async def run_axial_coding(batch_index: int | None = None) -> str:
         meta = ctx.workspace.load_run_meta()
         if meta is None:
             return progress.run_not_initialized
 
         partition = ctx.workspace.load_partition()
         id_to_finished = {item.id: item for item in ctx.workspace.load_finished_texts()}
-        kevin_source_ids = [
-            text_id for text_id in partition.kevin_text_ids if text_id in id_to_finished
-        ]
-        batches = _chunked(kevin_source_ids, meta.kevin_batch_size)
+        batches = monitor_update_batches(
+            partition.update_text_ids,
+            set(id_to_finished),
+            meta.update_batch_size,
+        )
         if not batches:
-            return progress.no_kevin_batches
+            return progress.no_axial_coding_batches
 
         if batch_index is not None:
             if batch_index < 1 or batch_index > len(batches):
@@ -324,7 +358,7 @@ def build_coding_tools(ctx: CodingToolContext) -> list[StructuredTool]:
                 continue
             items_details = extract_item_details(batch_finished)
             try:
-                output = await arun_kevin(
+                output = await arun_axial_coding(
                     ctx.llm_pro,
                     ctx.prompt_ctx,
                     list(current),
@@ -332,7 +366,7 @@ def build_coding_tools(ctx: CodingToolContext) -> list[StructuredTool]:
                     items_details=items_details,
                 )
             except Exception as exc:
-                node_warnings.notes.append(f"kevin batch {offset} skipped: {exc!r}")
+                node_warnings.notes.append(f"AxialCoding batch {offset} skipped: {exc!r}")
                 continue
 
             candidate = [
@@ -340,23 +374,26 @@ def build_coding_tools(ctx: CodingToolContext) -> list[StructuredTool]:
                 for item in output.dimensions
                 if item.items
             ]
-            reviewed, warnings = review_dimensions(candidate, finished_texts=None)
+            reviewed, warnings = verify_dimensions(candidate, finished_texts=None)
             node_warnings.add(warnings)
             if reviewed:
                 current = reviewed
-                ctx.workspace.save_dimensions(current)
-                ctx.workspace.save_codebook_batch(offset, current)
+                encode_dimensions(ctx.workspace, current)
+                encode_codebook_batch(ctx.workspace, offset, current)
                 processed += 1
 
-        final_reviewed, final_warnings = review_dimensions(
+        final_reviewed, final_warnings = verify_dimensions(
             current,
             ctx.workspace.load_finished_texts(),
         )
         node_warnings.add(final_warnings)
-        ctx.workspace.save_dimensions(final_reviewed)
+        encode_dimensions(ctx.workspace, final_reviewed)
         ctx.workspace.merge_warnings(node_warnings.as_dict())
         ctx.workspace.save_queue([])
-        return progress.kevin_summary.format(processed=processed, dimensions=len(final_reviewed))
+        return progress.axial_coding_summary.format(processed=processed, dimensions=len(final_reviewed))
+
+    async def run_kevin_batches(batch_index: int | None = None) -> str:
+        return await run_axial_coding(batch_index=batch_index)
 
     async def export_result() -> str:
         meta = ctx.workspace.load_run_meta()
@@ -368,7 +405,7 @@ def build_coding_tools(ctx: CodingToolContext) -> list[StructuredTool]:
     async def workspace_status() -> str:
         import json
 
-        return json.dumps(ctx.workspace.status(), ensure_ascii=False, indent=2)
+        return json.dumps(decode_workspace_status(ctx.workspace), ensure_ascii=False, indent=2)
 
     schemas = _tool_input_schemas(ctx.language)
     descriptions = bundle.llm.tool_descriptions
@@ -380,22 +417,40 @@ def build_coding_tools(ctx: CodingToolContext) -> list[StructuredTool]:
             args_schema=schemas.init_run,
         ),
         StructuredTool.from_function(
+            coroutine=batch_open_coding,
+            name="batch_open_coding",
+            description=descriptions["batch_open_coding"],
+            args_schema=schemas.batch_open_coding,
+        ),
+        StructuredTool.from_function(
+            coroutine=run_construct_induction,
+            name="run_construct_induction",
+            description=descriptions["run_construct_induction"],
+            args_schema=ConstructInductionInput,
+        ),
+        StructuredTool.from_function(
+            coroutine=run_axial_coding,
+            name="run_axial_coding",
+            description=descriptions["run_axial_coding"],
+            args_schema=schemas.axial_coding_batch,
+        ),
+        StructuredTool.from_function(
             coroutine=batch_bob_code,
             name="batch_bob_code",
-            description=descriptions["batch_bob_code"],
-            args_schema=schemas.batch_bob,
+            description="Compatibility alias for batch_open_coding.",
+            args_schema=schemas.batch_open_coding,
         ),
         StructuredTool.from_function(
             coroutine=run_alice_codebook,
             name="run_alice_codebook",
-            description=descriptions["run_alice_codebook"],
-            args_schema=AliceCodebookInput,
+            description="Compatibility alias for run_construct_induction.",
+            args_schema=ConstructInductionInput,
         ),
         StructuredTool.from_function(
             coroutine=run_kevin_batches,
             name="run_kevin_batches",
-            description=descriptions["run_kevin_batches"],
-            args_schema=schemas.kevin_batch,
+            description="Compatibility alias for run_axial_coding.",
+            args_schema=schemas.axial_coding_batch,
         ),
         StructuredTool.from_function(
             coroutine=export_result,
@@ -441,5 +496,5 @@ def create_coding_tool_context(
         prompts_dir_label=path_label(resolved_prompts),
         workspace_dir_label=path_label(workspace.root),
         language=active_language,
-        on_progress=_default_bob_progress,
+        on_progress=_default_open_coding_progress,
     )

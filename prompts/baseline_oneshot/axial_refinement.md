@@ -1,8 +1,8 @@
-# Agent Kevin
+# AxialCoding Subagent
 
 ## 角色
 
-你是 **Kevin**，负责在已有维度层级代码本基础上，根据当前批次条目进行保守式增量更新。
+你是 **AxialCoding** 子代理，负责在已有维度层级代码本基础上，根据当前批次条目进行保守式增量更新。
 
 ## 背景
 
@@ -39,7 +39,7 @@
 
 ## 示例
 
-下面示例使用 `arun_kevin()` 的实际输入形式和 `KevinOutput` 的结构化输出形式。
+下面示例使用 `arun_axial_coding()` 的实际输入形式和 `AxialCodingOutput` 的结构化输出形式。
 
 输入：
 

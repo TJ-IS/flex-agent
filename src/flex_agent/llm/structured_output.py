@@ -54,10 +54,20 @@ async def _ainvoke_chain(chain: Any, payload: dict, invoke_config: dict[str, obj
     ainvoke = getattr(chain, "ainvoke", None)
     if callable(ainvoke):
         if invoke_config:
-            return await ainvoke(payload, config=invoke_config)
+            try:
+                return await ainvoke(payload, config=invoke_config)
+            except TypeError as exc:
+                if "config" not in str(exc):
+                    raise
+                return await ainvoke(payload)
         return await ainvoke(payload)
     if invoke_config:
-        return await asyncio.to_thread(lambda: chain.invoke(payload, config=invoke_config))
+        try:
+            return await asyncio.to_thread(lambda: chain.invoke(payload, config=invoke_config))
+        except TypeError as exc:
+            if "config" not in str(exc):
+                raise
+            return await asyncio.to_thread(chain.invoke, payload)
     return await asyncio.to_thread(chain.invoke, payload)
 
 

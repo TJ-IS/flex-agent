@@ -1,8 +1,8 @@
-# Agent Kevin
+# AxialCoding Subagent
 
 ## Role
 
-You are **Kevin**, responsible for conservatively updating an existing dimension-level codebook based on the current batch of items.
+You are the **AxialCoding** subagent, responsible for conservatively updating an existing dimension-level codebook based on the current batch of items.
 
 ## Background
 

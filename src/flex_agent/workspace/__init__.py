@@ -262,7 +262,7 @@ class Workspace:
         codebook_count = min(max(0, codebook_nums), len(texts))
         rng = random.Random(random_seed)
         codebook_ids = sorted(item.id for item in rng.sample(texts, k=codebook_count)) if codebook_count else []
-        kevin_ids = [text.id for text in texts if text.id not in set(codebook_ids)]
+        update_ids = [text.id for text in texts if text.id not in set(codebook_ids)]
 
         meta = RunMeta(
             data_path=str(data_path),
@@ -278,7 +278,7 @@ class Workspace:
         )
         self.save_run_meta(meta)
         self.save_partition(
-            PartitionMeta(codebook_text_ids=codebook_ids, kevin_text_ids=kevin_ids)
+            PartitionMeta(codebook_text_ids=codebook_ids, kevin_text_ids=update_ids)
         )
         self.save_queue([text.id for text in texts])
         self.save_dimensions([])
@@ -456,6 +456,8 @@ class Workspace:
             "texts_total": len(self.load_texts()),
             "coded_count": len(coded_ids),
             "queue_remaining": len(self.load_queue()),
+            "seed_text_ids": partition.codebook_text_ids,
+            "update_text_ids": partition.kevin_text_ids,
             "codebook_text_ids": partition.codebook_text_ids,
             "kevin_text_ids": partition.kevin_text_ids,
             "dimensions_count": len(dimensions),

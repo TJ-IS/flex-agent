@@ -1,4 +1,4 @@
-"""Async per-text semantic judging (Bob-style concurrency)."""
+"""Async per-text semantic judging (OpenCoding-style concurrency)."""
 
 from __future__ import annotations
 

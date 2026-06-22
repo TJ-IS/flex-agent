@@ -17,14 +17,18 @@ WORKSPACES_ROOT = PROJECT_ROOT / "workspaces"
 DEFAULT_PROMPTS_DIR = PROMPTS_ROOT / "baseline"
 DEFAULT_WORKSPACE = WORKSPACES_ROOT / "baseline"
 
-REQUIRED_PROMPT_FILES = (
-    "agent_alice.md",
-    "agent_bob.md",
-    "agent_kevin.md",
+REQUIRED_PROMPT_FILE_GROUPS = (
+    ("construct_induction.md", "agent_alice.md"),
+    ("open_coding.md", "agent_bob.md"),
+    ("axial_refinement.md", "agent_kevin.md"),
     "grounded_theory_background.md",
     "task_background.md",
     "eval_text_alignment.md",
     "eval_dimension_name_alignment.md",
+)
+REQUIRED_PROMPT_FILES = tuple(
+    requirement[0] if isinstance(requirement, tuple) else requirement
+    for requirement in REQUIRED_PROMPT_FILE_GROUPS
 )
 
 _active_prompts_dir: Path = DEFAULT_PROMPTS_DIR
@@ -59,7 +63,14 @@ def _resolve_under_root(spec: str | Path, *, root: Path, prefix: str) -> Path:
 def _validate_prompts_dir(path: Path) -> Path:
     if not path.is_dir():
         raise FileNotFoundError(f"Prompts directory not found: {path}")
-    missing = [name for name in REQUIRED_PROMPT_FILES if not (path / name).is_file()]
+    missing: list[str] = []
+    for requirement in REQUIRED_PROMPT_FILE_GROUPS:
+        if isinstance(requirement, tuple):
+            if not any((path / name).is_file() for name in requirement):
+                missing.append(" or ".join(requirement))
+            continue
+        if not (path / requirement).is_file():
+            missing.append(requirement)
     if missing:
         raise FileNotFoundError(
             f"Prompts directory {path} is missing required files: {', '.join(missing)}"

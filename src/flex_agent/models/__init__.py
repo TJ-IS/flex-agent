@@ -64,6 +64,10 @@ class RunMeta(BaseModel):
     workspace_dir: str | None = None
     language: str = "zh"
 
+    @property
+    def update_batch_size(self) -> int:
+        return self.kevin_batch_size
+
 
 class SessionMeta(BaseModel):
     prompts_dir: str
@@ -76,6 +80,14 @@ class SessionMeta(BaseModel):
 class PartitionMeta(BaseModel):
     codebook_text_ids: List[int] = Field(default_factory=list)
     kevin_text_ids: List[int] = Field(default_factory=list)
+
+    @property
+    def seed_text_ids(self) -> List[int]:
+        return self.codebook_text_ids
+
+    @property
+    def update_text_ids(self) -> List[int]:
+        return self.kevin_text_ids
 
 
 class WorkspaceSnapshot(BaseModel):

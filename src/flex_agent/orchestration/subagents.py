@@ -13,39 +13,43 @@ SUBAGENT_DENY_PRIVATE = [
     ),
 ]
 
+OPEN_CODING_SUBAGENT = "open-coding"
+INDUCTION_SUBAGENT = "construct-induction"
+AXIAL_CODING_SUBAGENT = "axial-coding"
+
 
 def build_subagents(prompt_ctx: PromptContext | None = None, *, language: str | None = None) -> list[dict]:
     ctx = prompt_ctx or PromptContext.load()
     bundle = get_bundle(language or ctx.language).llm
     return [
         {
-            "name": "bob-coder",
-            "description": bundle.subagent_descriptions["bob-coder"],
+            "name": OPEN_CODING_SUBAGENT,
+            "description": bundle.subagent_descriptions[OPEN_CODING_SUBAGENT],
             "system_prompt": (
-                ctx.bob_template
-                + bundle.subagent_addenda["bob-coder"]
-                + bundle.bob_workspace_schema_note
+                ctx.open_coding_template
+                + bundle.subagent_addenda[OPEN_CODING_SUBAGENT]
+                + bundle.open_coding_workspace_schema_note
                 + bundle.private_access_note
             ),
             "permissions": SUBAGENT_DENY_PRIVATE,
         },
         {
-            "name": "alice-codebook",
-            "description": bundle.subagent_descriptions["alice-codebook"],
+            "name": INDUCTION_SUBAGENT,
+            "description": bundle.subagent_descriptions[INDUCTION_SUBAGENT],
             "system_prompt": (
-                ctx.alice_template
-                + bundle.subagent_addenda["alice-codebook"]
+                ctx.induction_template
+                + bundle.subagent_addenda[INDUCTION_SUBAGENT]
                 + bundle.codebook_workspace_schema_note
                 + bundle.private_access_note
             ),
             "permissions": SUBAGENT_DENY_PRIVATE,
         },
         {
-            "name": "kevin-updater",
-            "description": bundle.subagent_descriptions["kevin-updater"],
+            "name": AXIAL_CODING_SUBAGENT,
+            "description": bundle.subagent_descriptions[AXIAL_CODING_SUBAGENT],
             "system_prompt": (
-                ctx.kevin_template
-                + bundle.subagent_addenda["kevin-updater"]
+                ctx.axial_refinement_template
+                + bundle.subagent_addenda[AXIAL_CODING_SUBAGENT]
                 + bundle.codebook_workspace_schema_note
                 + bundle.private_access_note
             ),

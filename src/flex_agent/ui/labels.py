@@ -6,10 +6,16 @@ from typing import Any
 from flex_agent.i18n import get_bundle
 
 TOOL_LABELS: dict[str, str] = dict(get_bundle("zh").cli.tool_labels)
+LEGACY_TOOL_LABELS = {
+    "batch_bob_code": "batch_open_coding",
+    "run_alice_codebook": "run_construct_induction",
+    "run_kevin_batches": "run_axial_coding",
+}
 
 
 def tool_label(name: str) -> str:
-    return get_bundle().cli.tool_labels.get(name, name)
+    canonical_name = LEGACY_TOOL_LABELS.get(name, name)
+    return get_bundle().cli.tool_labels.get(canonical_name, name)
 
 
 def summarize_tool_args(name: str, args: Any) -> str:
@@ -32,7 +38,7 @@ def summarize_tool_args(name: str, args: Any) -> str:
         todos = args.get("todos") or []
         return get_bundle().cli.todo_count.format(count=len(todos))
 
-    if name == "batch_bob_code":
+    if name in {"batch_open_coding", "batch_bob_code"}:
         ids = args.get("text_ids")
         if ids:
             return get_bundle().cli.text_count.format(count=len(ids))

@@ -1,4 +1,12 @@
-from flex_agent.coding.agents import PromptContext, arun_alice, arun_bob, arun_kevin
+from flex_agent.coding.agents import (
+    PromptContext,
+    arun_alice,
+    arun_axial_coding,
+    arun_bob,
+    arun_induction,
+    arun_kevin,
+    arun_open_coding,
+)
 from flex_agent.coding.export import export_open_coding_result
 from flex_agent.coding.quality import (
     QualityWarnings,
@@ -16,8 +24,11 @@ __all__ = [
     "PromptContext",
     "QualityWarnings",
     "arun_alice",
+    "arun_axial_coding",
     "arun_bob",
+    "arun_induction",
     "arun_kevin",
+    "arun_open_coding",
     "clean_content_markup",
     "export_open_coding_result",
     "extract_item_details",

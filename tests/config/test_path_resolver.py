@@ -17,6 +17,7 @@ from flex_agent.config import (
     resolve_workspace_dir,
     set_prompts_dir,
 )
+from flex_agent.coding.agents import PromptContext
 from flex_agent.i18n import resolve_language
 
 
@@ -69,6 +70,26 @@ class PathResolverTests(unittest.TestCase):
             empty.mkdir()
             with self.assertRaises(FileNotFoundError):
                 resolve_prompts_dir(empty)
+
+    def test_legacy_prompt_filenames_are_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            prompts = Path(tmp) / "legacy_prompts"
+            prompts.mkdir()
+            (prompts / "grounded_theory_background.md").write_text("GT", encoding="utf-8")
+            (prompts / "task_background.md").write_text("TASK", encoding="utf-8")
+            for name in ("agent_bob.md", "agent_alice.md", "agent_kevin.md"):
+                (prompts / name).write_text(
+                    "legacy {grounded_theory_background} {task_background}",
+                    encoding="utf-8",
+                )
+            for name in ("eval_text_alignment.md", "eval_dimension_name_alignment.md"):
+                (prompts / name).write_text("eval", encoding="utf-8")
+
+            resolved = resolve_prompts_dir(prompts)
+            ctx = PromptContext.load(resolved)
+
+            self.assertEqual(resolved, prompts.resolve())
+            self.assertEqual(ctx.open_coding_template, "legacy GT TASK")
 
     def test_set_prompts_dir_updates_session(self) -> None:
         set_prompts_dir("baseline")

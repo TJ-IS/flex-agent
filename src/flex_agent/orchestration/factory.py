@@ -68,5 +68,5 @@ def create_flex_agent(
         subagents=build_subagents(ctx.prompt_ctx, language=ctx.language),
         backend=build_backend(workspace),
         checkpointer=_CHECKPOINTER,
-        name="flex-agent-orchestrator",
+        name="code-orchestrator",
     )

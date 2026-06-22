@@ -1,8 +1,8 @@
-# Agent Bob
+# OpenCoding Subagent
 
 ## 角色
 
-你是 **Bob**，负责对单条中文用户评论进行首轮开放式编码。
+你是 **OpenCoding** 子代理，负责对单条中文用户评论进行首轮开放式编码。
 
 ## 背景
 
@@ -33,7 +33,7 @@
 
 ## 示例
 
-下面示例使用 `arun_bob()` 的实际输入形式和 `BobOutput` 的结构化输出形式。
+下面示例使用 `arun_open_coding()` 的实际输入形式和 `OpenCodingOutput` 的结构化输出形式。
 
 ### 示例 1
 

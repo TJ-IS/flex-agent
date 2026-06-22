@@ -17,7 +17,7 @@ _active_language: Language = DEFAULT_LANGUAGE
 class LLMBundle:
     orchestrator_prompt: str
     private_access_note: str
-    bob_workspace_schema_note: str
+    open_coding_workspace_schema_note: str
     codebook_workspace_schema_note: str
     subagent_descriptions: Mapping[str, str]
     subagent_addenda: Mapping[str, str]
@@ -86,18 +86,18 @@ class ReportBundle:
 
 @dataclass(frozen=True)
 class ProgressBundle:
-    bob_start: str
-    bob_skip: str
-    bob_done: str
-    bob_summary: str
+    open_coding_start: str
+    open_coding_skip: str
+    open_coding_done: str
+    open_coding_summary: str
     initialized_run: str
     no_texts_to_code: str
-    alice_empty_pool: str
-    alice_written: str
+    induction_empty_pool: str
+    induction_written: str
     run_not_initialized: str
-    no_kevin_batches: str
+    no_axial_coding_batches: str
     invalid_batch_index: str
-    kevin_summary: str
+    axial_coding_summary: str
     export_missing_run: str
     export_result: str
     eval_no_results: str
@@ -134,6 +134,38 @@ class ProgressBundle:
     axial_complete: str
     axial_aggregate_saved: str
     eval_aggregate_saved: str
+
+    @property
+    def bob_start(self) -> str:
+        return self.open_coding_start
+
+    @property
+    def bob_skip(self) -> str:
+        return self.open_coding_skip
+
+    @property
+    def bob_done(self) -> str:
+        return self.open_coding_done
+
+    @property
+    def bob_summary(self) -> str:
+        return self.open_coding_summary
+
+    @property
+    def alice_empty_pool(self) -> str:
+        return self.induction_empty_pool
+
+    @property
+    def alice_written(self) -> str:
+        return self.induction_written
+
+    @property
+    def no_kevin_batches(self) -> str:
+        return self.no_axial_coding_batches
+
+    @property
+    def kevin_summary(self) -> str:
+        return self.axial_coding_summary
 
 
 @dataclass(frozen=True)
@@ -180,10 +212,10 @@ ZH_ORCHESTRATOR_PROMPT = """你是 flex-agent 主编排器，负责自主完成 
 - `private/codebook_done_human.jsonl`：人工评测 benchmark（仅主编排器可访问；编码时禁止读取）
 - `corpus/raw.jsonl`：`init_open_coding_run` 采样后的工作副本，不要把它当作初始化数据源
 - `corpus/queue.json`：待编码 id
-- `corpus/partition.json`：Alice/Kevin 划分
-- `coding/{id}.json`：Bob 单条编码结果
+- `corpus/partition.json`：seed/update pool 划分
+- `coding/{id}.json`：OpenCoding 单条编码结果
 - `codebook/dimensions.json`：当前代码本
-- `codebook/batches/{n}.json`：Kevin 批次快照
+- `codebook/batches/{n}.json`：AxialCoding 批次快照
 - `quality/warnings.json`：质量告警
 - `exports/open_coding_result_*.json`：编码结果导出
 - `eval/open/`：open coding 评测结果（`summary.json`、`report.txt`、`{id}.json`）
@@ -194,18 +226,18 @@ ZH_ORCHESTRATOR_PROMPT = """你是 flex-agent 主编排器，负责自主完成 
 ## 标准 SOP
 
 1. `init_open_coding_run`：从原始 jsonl（如 `/corpus/codebook_done.jsonl`）加载、采样、初始化 corpus 与 partition
-2. `batch_bob_code`：并发编码全部文本，写入 `coding/`
-3. `run_alice_codebook`：基于 codebook 子样本生成初始 dimensions
-4. `run_kevin_batches`：按批更新代码本
+2. `batch_open_coding`：并发编码全部文本，写入 `coding/`
+3. `run_construct_induction`：基于 seed pool 生成初始 dimensions
+4. `run_axial_coding`：按 update pool 批次更新代码本
 5. `export_result`：导出评估兼容结果
 
 若初始化失败或 corpus 状态不一致，重新调用 `init_open_coding_run` 并指定正确的原始 data_path；不要手动改 corpus 文件。
 
 ## 子 Agent
 
-- `bob-coder`：单条文本开放式编码专家
-- `alice-codebook`：初始代码本归纳专家
-- `kevin-updater`：保守增量更新代码本专家
+- `open-coding`：单条文本开放式编码专家
+- `construct-induction`：初始代码本归纳专家
+- `axial-coding`：保守增量更新代码本专家
 
 当用户要求检查、解释或微调某个文件内容时，可结合 `read_file`/`grep` 与子 Agent 协作。
 请用中文与用户沟通，保持简洁、可审计。
@@ -230,10 +262,10 @@ EN_ORCHESTRATOR_PROMPT = """You are the flex-agent orchestrator. Your job is to 
 - `private/codebook_done_human.jsonl`: human evaluation benchmark, visible only to the orchestrator; do not read it during coding
 - `corpus/raw.jsonl`: sampled working copy from `init_open_coding_run`; do not treat it as the original data source
 - `corpus/queue.json`: text ids still waiting for coding
-- `corpus/partition.json`: Alice/Kevin split
-- `coding/{id}.json`: Bob single-text coding result
+- `corpus/partition.json`: seed/update pool split
+- `coding/{id}.json`: OpenCoding single-text coding result
 - `codebook/dimensions.json`: current codebook
-- `codebook/batches/{n}.json`: Kevin batch snapshot
+- `codebook/batches/{n}.json`: AxialCoding batch snapshot
 - `quality/warnings.json`: quality warnings
 - `exports/open_coding_result_*.json`: exported coding result
 - `eval/open/`: open-coding evaluation results (`summary.json`, `report.txt`, `{id}.json`)
@@ -244,18 +276,18 @@ During coding, do not read `private/` or `eval/`, and do not pass their content 
 ## Standard SOP
 
 1. `init_open_coding_run`: load and sample from the original jsonl, such as `/corpus/codebook_done.jsonl`, and initialize corpus and partition files
-2. `batch_bob_code`: code every queued text concurrently and write `coding/`
-3. `run_alice_codebook`: create initial dimensions from the codebook subsample
-4. `run_kevin_batches`: update the codebook by batch
+2. `batch_open_coding`: code every queued text concurrently and write `coding/`
+3. `run_construct_induction`: create initial dimensions from the seed pool
+4. `run_axial_coding`: update the codebook from update-pool batches
 5. `export_result`: export the evaluation-compatible result
 
 If initialization fails or corpus state is inconsistent, call `init_open_coding_run` again with the correct original `data_path`; do not manually edit corpus files.
 
 ## Subagents
 
-- `bob-coder`: single-text open coding specialist
-- `alice-codebook`: initial codebook synthesis specialist
-- `kevin-updater`: conservative incremental codebook updater
+- `open-coding`: single-text open coding specialist
+- `construct-induction`: initial codebook synthesis specialist
+- `axial-coding`: conservative incremental codebook updater
 
 When the user asks to inspect, explain, or lightly adjust file contents, combine `read_file`/`grep` with subagent collaboration.
 Communicate with the user in English, and keep responses concise and auditable.
@@ -270,7 +302,7 @@ ZH_BUNDLE = TextBundle(
             "\n\n禁止访问 `private/` 与 `eval/` 目录及其内容；这些目录仅用于主编排器离线评测，"
             "不得读取、引用或向其他 Agent 传递其中数据。"
         ),
-        bob_workspace_schema_note=(
+        open_coding_workspace_schema_note=(
             "\n\n聊天回复可以简洁；如需写入 `coding/{id}.json`，内容必须是单个 JSON 对象，字段为 "
             "`id`、`content`、`content_with_labels`、`items`，其中 `items` 的元素包含 "
             "`name`、`evidence`、`normalized_label`、`reason`。"
@@ -280,27 +312,27 @@ ZH_BUNDLE = TextBundle(
             "维度对象数组，每个对象包含 `name`、`items`、`definition`；不要写成带 `dimensions` 包装层的对象。"
         ),
         subagent_descriptions={
-            "bob-coder": "对单条中文评论做开放式编码，提取体验维度并写入 coding/{id}.json。适合检查单条编码质量或补编码。",
-            "alice-codebook": "基于 codebook 样本的 Bob 结果归纳初始 dimensions，写入 codebook/dimensions.json。",
-            "kevin-updater": "在现有 codebook/dimensions.json 基础上做保守增量更新，并写 batch 快照。",
+            "open-coding": "对单条中文评论做开放式编码，提取体验维度并写入 coding/{id}.json。适合检查单条编码质量或补编码。",
+            "construct-induction": "基于 seed pool 的 OpenCoding 结果归纳初始 dimensions，写入 codebook/dimensions.json。",
+            "axial-coding": "在现有 codebook/dimensions.json 基础上做保守增量更新，并写 batch 快照。",
         },
         subagent_addenda={
-            "bob-coder": "\n\n你是子 Agent。读取 corpus/raw.jsonl 与 coding/ 文件，必要时用 write_file 写入 coding/{id}.json。",
-            "alice-codebook": "\n\n你是子 Agent。从 coding/ 中读取 partition.codebook_text_ids 对应文件，归纳后写入 codebook/dimensions.json。",
-            "kevin-updater": "\n\n你是子 Agent。读取 codebook/dimensions.json 与 Kevin 批次对应 coding 文件，输出完整更新版 dimensions。",
+            "open-coding": "\n\n你是 OpenCoding 子代理。读取 corpus/raw.jsonl 与 coding/ 文件，必要时用 write_file 写入 coding/{id}.json。",
+            "construct-induction": "\n\n你是 Inducing 子代理。从 coding/ 中读取 partition.codebook_text_ids 对应 seed pool 文件，归纳后写入 codebook/dimensions.json。",
+            "axial-coding": "\n\n你是 AxialCoding 子代理。读取 codebook/dimensions.json 与 update-pool 批次对应 coding 文件，输出完整更新版 dimensions。",
         },
         schema_descriptions={
-            "bob_item_name": "对提取片段的中文简短概括。",
-            "bob_item_evidence": "原评论中的精确或近似原文证据。",
-            "bob_item_normalized_label": "该条目的主中文维度。",
-            "bob_item_reason": "一句简短中文说明，解释为何该证据支持该维度。",
-            "bob_content_with_labels": "原始内容，只在被提取片段外包裹 <p>...</p> 标签，不改写原句或使用其他标签。",
-            "alice_name": "维度名称。",
-            "alice_items": "属于该维度的中文条目标签，必须来自 items_details.label 或 items_pool 中的原始标签。",
-            "alice_definition": "用一句简洁的中文定义该维度的边界。",
-            "kevin_name": "维度名称。",
-            "kevin_items": "属于该维度的中文条目列表，必须是已有代码本条目或当前批次输入中的原始标签。",
-            "kevin_definition": "用一句简洁的中文定义该维度的边界。",
+            "open_coding_item_name": "对提取片段的中文简短概括。",
+            "open_coding_item_evidence": "原评论中的精确或近似原文证据。",
+            "open_coding_item_normalized_label": "该条目的主中文维度。",
+            "open_coding_item_reason": "一句简短中文说明，解释为何该证据支持该维度。",
+            "open_coding_content_with_labels": "原始内容，只在被提取片段外包裹 <p>...</p> 标签，不改写原句或使用其他标签。",
+            "induction_dimension_name": "维度名称。",
+            "induction_dimension_items": "属于该维度的中文条目标签，必须来自 items_details.label 或 items_pool 中的原始标签。",
+            "induction_dimension_definition": "用一句简洁的中文定义该维度的边界。",
+            "axial_coding_dimension_name": "维度名称。",
+            "axial_coding_dimension_items": "属于该维度的中文条目列表，必须是已有代码本条目或当前批次输入中的原始标签。",
+            "axial_coding_dimension_definition": "用一句简洁的中文定义该维度的边界。",
             "semantic_match_thought": "可选的简短判断依据。",
             "semantic_match_action": "可选的简短匹配结果标记。",
             "semantic_text_reasoning_trace": "可选的整条文本简短判断摘要。",
@@ -310,20 +342,20 @@ ZH_BUNDLE = TextBundle(
         tool_arg_descriptions={
             "data_path": "源 jsonl 路径，每行包含 comments/content 字段，例如 /corpus/codebook_done.jsonl。不要传 corpus/raw.jsonl。",
             "max_nums": "要处理的最大文本数。",
-            "codebook_nums": "用于 Alice 初始代码本样本的文本数。",
-            "kevin_batch_size": "Kevin 批次大小。",
+            "codebook_nums": "用于 Inducing 初始代码本 seed pool 的文本数。",
+            "kevin_batch_size": "AxialCoding update-pool 批次大小。",
             "sample_mode": "采样方式：sequential 或 random。",
             "random_seed": "采样/划分随机种子。",
             "open_mode": "导出元数据中的 open coding 模式标签。",
             "text_ids": "可选的显式 text id 列表；默认使用 queue 中所有文本。",
-            "concurrency_limit": "Bob 并发调用上限。",
-            "batch_index": "从 1 开始的 Kevin 批次序号；省略则顺序运行所有批次。",
+            "concurrency_limit": "OpenCoding 并发调用上限。",
+            "batch_index": "从 1 开始的 AxialCoding 批次序号；省略则顺序运行所有批次。",
         },
         tool_descriptions={
             "init_open_coding_run": "初始化 workspace 中的 corpus、partition、queue 和空代码本文件。",
-            "batch_bob_code": "并发运行 Bob 对 text id 编码，并写入 coding/{id}.json 文件。",
-            "run_alice_codebook": "基于 codebook 样本构建初始 dimensions，并写入 codebook/dimensions.json。",
-            "run_kevin_batches": "从 Kevin 批次增量更新代码本，并写入批次快照。",
+            "batch_open_coding": "并发运行 OpenCoding 对 text id 编码，并写入 coding/{id}.json 文件。",
+            "run_construct_induction": "基于 seed pool 构建初始 dimensions，并写入 codebook/dimensions.json。",
+            "run_axial_coding": "从 update-pool 批次增量更新代码本，并写入批次快照。",
             "export_result": "将 workspace 文件聚合为 code-agent 兼容的 exports/open_coding_result_*.json。",
             "workspace_status": "以 JSON 返回当前 workspace 计数与运行元数据。",
         },
@@ -350,9 +382,9 @@ ZH_BUNDLE = TextBundle(
         tool_labels={
             "write_todos": "更新计划",
             "init_open_coding_run": "初始化语料",
-            "batch_bob_code": "Bob 批量编码",
-            "run_alice_codebook": "Alice 归纳代码本",
-            "run_kevin_batches": "Kevin 增量更新",
+            "batch_open_coding": "OpenCoding 批量编码",
+            "run_construct_induction": "Inducing 归纳代码本",
+            "run_axial_coding": "AxialCoding 增量 refinement",
             "export_result": "导出结果",
             "workspace_status": "检查 workspace",
             "task": "子 Agent 任务",
@@ -429,23 +461,23 @@ ZH_BUNDLE = TextBundle(
         axial_global_result="全局结果: eval/axial/{name}",
     ),
     progress=ProgressBundle(
-        bob_start="[bob] 开始编码 {total} 条 (concurrency={limit})",
-        bob_skip="[bob] 跳过 text_id={text_id} ({done}/{total})",
-        bob_done="[bob] 完成 text_id={text_id} ({done}/{total}) · items={items}",
-        bob_summary="Bob coded {coded}/{total} texts. Skipped={skipped}. Remaining queue={remaining}.",
-        initialized_run="Initialized run with {max_nums} texts, codebook={codebook}, kevin={kevin}.",
+        open_coding_start="[OpenCoding] 开始编码 {total} 条 (concurrency={limit})",
+        open_coding_skip="[OpenCoding] 跳过 text_id={text_id} ({done}/{total})",
+        open_coding_done="[OpenCoding] 完成 text_id={text_id} ({done}/{total}) · items={items}",
+        open_coding_summary="OpenCoding processed {coded}/{total} texts. Skipped={skipped}. Remaining queue={remaining}.",
+        initialized_run="Initialized run with {max_nums} texts, seed={codebook}, update={update}.",
         no_texts_to_code="No texts to code.",
-        alice_empty_pool="Alice skipped: empty item pool.",
-        alice_written="Alice wrote {count} dimensions to codebook/dimensions.json.",
+        induction_empty_pool="Inducing skipped: empty item pool.",
+        induction_written="Inducing wrote {count} dimensions to codebook/dimensions.json.",
         run_not_initialized="Run not initialized.",
-        no_kevin_batches="No Kevin batches to process.",
+        no_axial_coding_batches="No AxialCoding batches to process.",
         invalid_batch_index="Invalid batch_index={batch_index}; valid range 1..{total}.",
-        kevin_summary="Kevin processed {processed} batch(es); dimensions={dimensions}.",
+        axial_coding_summary="AxialCoding processed {processed} batch(es); dimensions={dimensions}.",
         export_missing_run="Run not initialized; nothing to export.",
         export_result="Exported code-agent compatible result to {path}.",
         eval_no_results="尚无评测结果。请先运行 /eval:open。",
         eval_benchmark_missing="人工 benchmark 未就绪。请确认 flex-agent/data/ 下种子文件存在，并重新启动 CLI。",
-        eval_no_coded_texts="尚无已编码文本。请先运行 Bob 编码（batch_bob_code）后再评测。",
+        eval_no_coded_texts="尚无已编码文本。请先运行 OpenCoding 编码（batch_open_coding）后再评测。",
         eval_start="[eval] 开始评测 mode={mode}，已编码 {coded_count} 条文本",
         eval_load_benchmark="[eval] 加载人工 benchmark: {path}",
         eval_aligned_pairs="[eval] 对齐 {pairs} 对 (agent={coded_count}, human={human_count}, agent_only={agent_only})",
@@ -463,7 +495,7 @@ ZH_BUNDLE = TextBundle(
         semantic_skip="[eval] semantic 跳过 text_id={text_id}: {error!r}",
         semantic_progress="[eval] semantic {done}/{pending} 完成 (累计 {complete}/{total}): C={consistency:.1%} P={precision:.1%} R={recall:.1%}",
         axial_no_results="尚无主轴评测结果。请先运行 /eval:axial。",
-        axial_no_dimensions="尚无 codebook 维度。请先运行 Alice/Kevin 生成 codebook/dimensions.json。",
+        axial_no_dimensions="尚无 codebook 维度。请先运行 Inducing/AxialCoding 生成 codebook/dimensions.json。",
         axial_no_valid_dimensions="codebook 无有效主轴维度名。",
         axial_start="[eval:axial] 开始 workspace 级评测 mode={mode}：codebook {agent_count} 维 vs {human_count} 类 category",
         axial_category_mapping="[eval:axial] LLM category 映射: {count} 个 agent 主轴维度",
@@ -504,7 +536,7 @@ EN_BUNDLE = TextBundle(
             "They are reserved for offline evaluation by the orchestrator. Do not read, cite, "
             "or pass that data to other agents."
         ),
-        bob_workspace_schema_note=(
+        open_coding_workspace_schema_note=(
             "\n\nChat replies may be brief. If you write `coding/{id}.json`, the file must be "
             "one JSON object with fields `id`, `content`, `content_with_labels`, and `items`; "
             "each `items` entry contains `name`, `evidence`, `normalized_label`, and `reason`."
@@ -516,27 +548,27 @@ EN_BUNDLE = TextBundle(
             "`dimensions` object."
         ),
         subagent_descriptions={
-            "bob-coder": "Open-code one Chinese review, extract experience dimensions, and write coding/{id}.json. Useful for checking or filling one text.",
-            "alice-codebook": "Synthesize initial dimensions from Bob results in the codebook sample and write codebook/dimensions.json.",
-            "kevin-updater": "Conservatively update the existing codebook/dimensions.json from Kevin batches and write batch snapshots.",
+            "open-coding": "Open-code one Chinese review, extract experience dimensions, and write coding/{id}.json. Useful for checking or filling one text.",
+            "construct-induction": "Synthesize initial dimensions from OpenCoding results in the seed pool and write codebook/dimensions.json.",
+            "axial-coding": "Conservatively update the existing codebook/dimensions.json from update-pool batches and write batch snapshots.",
         },
         subagent_addenda={
-            "bob-coder": "\n\nYou are a subagent. Read corpus/raw.jsonl and coding/ files, and use write_file to write coding/{id}.json when needed.",
-            "alice-codebook": "\n\nYou are a subagent. Read coding/ files for partition.codebook_text_ids, then write the synthesized codebook to codebook/dimensions.json.",
-            "kevin-updater": "\n\nYou are a subagent. Read codebook/dimensions.json and coding files for the Kevin batch, then output the full updated dimensions array.",
+            "open-coding": "\n\nYou are the OpenCoding subagent. Read corpus/raw.jsonl and coding/ files, and use write_file to write coding/{id}.json when needed.",
+            "construct-induction": "\n\nYou are the Inducing subagent. Read coding/ files for partition.codebook_text_ids in the seed pool, then write the synthesized codebook to codebook/dimensions.json.",
+            "axial-coding": "\n\nYou are the AxialCoding subagent. Read codebook/dimensions.json and coding files for the update-pool batch, then output the full updated dimensions array.",
         },
         schema_descriptions={
-            "bob_item_name": "A concise English summary of the extracted fragment.",
-            "bob_item_evidence": "Exact or approximate source evidence from the original review.",
-            "bob_item_normalized_label": "The primary English dimension for this item.",
-            "bob_item_reason": "One brief English sentence explaining why the evidence supports the dimension.",
-            "bob_content_with_labels": "The original content with only extracted fragments wrapped in <p>...</p>; do not rewrite the sentence or use other tags.",
-            "alice_name": "Dimension name.",
-            "alice_items": "English item labels in this dimension; each must come from items_details.label or the original items_pool labels.",
-            "alice_definition": "One concise English sentence defining the boundary of this dimension.",
-            "kevin_name": "Dimension name.",
-            "kevin_items": "English item labels in this dimension; each must be an existing codebook item or an original label from the current batch input.",
-            "kevin_definition": "One concise English sentence defining the boundary of this dimension.",
+            "open_coding_item_name": "A concise English summary of the extracted fragment.",
+            "open_coding_item_evidence": "Exact or approximate source evidence from the original review.",
+            "open_coding_item_normalized_label": "The primary English dimension for this item.",
+            "open_coding_item_reason": "One brief English sentence explaining why the evidence supports the dimension.",
+            "open_coding_content_with_labels": "The original content with only extracted fragments wrapped in <p>...</p>; do not rewrite the sentence or use other tags.",
+            "induction_dimension_name": "Dimension name.",
+            "induction_dimension_items": "English item labels in this dimension; each must come from items_details.label or the original items_pool labels.",
+            "induction_dimension_definition": "One concise English sentence defining the boundary of this dimension.",
+            "axial_coding_dimension_name": "Dimension name.",
+            "axial_coding_dimension_items": "English item labels in this dimension; each must be an existing codebook item or an original label from the current batch input.",
+            "axial_coding_dimension_definition": "One concise English sentence defining the boundary of this dimension.",
             "semantic_match_thought": "Optional brief rationale.",
             "semantic_match_action": "Optional brief match-action marker.",
             "semantic_text_reasoning_trace": "Optional brief summary of the whole-text judgment.",
@@ -546,20 +578,20 @@ EN_BUNDLE = TextBundle(
         tool_arg_descriptions={
             "data_path": "Path to a source jsonl with a comments/content field per line, such as /corpus/codebook_done.jsonl. Do not pass corpus/raw.jsonl.",
             "max_nums": "Maximum number of texts to process.",
-            "codebook_nums": "Number of texts for the Alice codebook sample.",
-            "kevin_batch_size": "Kevin batch size.",
+            "codebook_nums": "Number of texts for the Inducing seed pool.",
+            "kevin_batch_size": "AxialCoding update-pool batch size.",
             "sample_mode": "Sampling mode: sequential or random.",
             "random_seed": "Random seed for sampling and partitioning.",
             "open_mode": "Open-coding mode label for export metadata.",
             "text_ids": "Optional explicit text ids. Defaults to all texts in the queue.",
-            "concurrency_limit": "Maximum number of concurrent Bob calls.",
-            "batch_index": "1-based Kevin batch index. If omitted, runs all Kevin batches sequentially.",
+            "concurrency_limit": "Maximum number of concurrent OpenCoding calls.",
+            "batch_index": "1-based AxialCoding batch index. If omitted, runs all update-pool batches sequentially.",
         },
         tool_descriptions={
             "init_open_coding_run": "Initialize corpus, partition, queue, and an empty codebook in workspace files.",
-            "batch_bob_code": "Concurrently run Bob coding for text ids and write coding/{id}.json files.",
-            "run_alice_codebook": "Build initial dimensions from the codebook sample and write codebook/dimensions.json.",
-            "run_kevin_batches": "Incrementally update the codebook from Kevin batches and write batch snapshots.",
+            "batch_open_coding": "Concurrently run OpenCoding for text ids and write coding/{id}.json files.",
+            "run_construct_induction": "Build initial dimensions from the seed pool and write codebook/dimensions.json.",
+            "run_axial_coding": "Incrementally update the codebook from update-pool batches and write batch snapshots.",
             "export_result": "Aggregate workspace files into code-agent compatible exports/open_coding_result_*.json.",
             "workspace_status": "Return current workspace counters and run metadata as JSON.",
         },
@@ -586,9 +618,9 @@ EN_BUNDLE = TextBundle(
         tool_labels={
             "write_todos": "Update plan",
             "init_open_coding_run": "Initialize corpus",
-            "batch_bob_code": "Batch Bob coding",
-            "run_alice_codebook": "Alice codebook synthesis",
-            "run_kevin_batches": "Kevin incremental update",
+            "batch_open_coding": "Batch OpenCoding",
+            "run_construct_induction": "Inducing synthesis",
+            "run_axial_coding": "AxialCoding refinement",
             "export_result": "Export result",
             "workspace_status": "Check workspace",
             "task": "Subagent task",
@@ -665,23 +697,23 @@ EN_BUNDLE = TextBundle(
         axial_global_result="Global result: eval/axial/{name}",
     ),
     progress=ProgressBundle(
-        bob_start="[bob] Starting {total} texts (concurrency={limit})",
-        bob_skip="[bob] Skipped text_id={text_id} ({done}/{total})",
-        bob_done="[bob] Completed text_id={text_id} ({done}/{total}) · items={items}",
-        bob_summary="Bob coded {coded}/{total} texts. Skipped={skipped}. Remaining queue={remaining}.",
-        initialized_run="Initialized run with {max_nums} texts, codebook={codebook}, kevin={kevin}.",
+        open_coding_start="[OpenCoding] Starting {total} texts (concurrency={limit})",
+        open_coding_skip="[OpenCoding] Skipped text_id={text_id} ({done}/{total})",
+        open_coding_done="[OpenCoding] Completed text_id={text_id} ({done}/{total}) · items={items}",
+        open_coding_summary="OpenCoding processed {coded}/{total} texts. Skipped={skipped}. Remaining queue={remaining}.",
+        initialized_run="Initialized run with {max_nums} texts, seed={codebook}, update={update}.",
         no_texts_to_code="No texts to code.",
-        alice_empty_pool="Alice skipped: empty item pool.",
-        alice_written="Alice wrote {count} dimensions to codebook/dimensions.json.",
+        induction_empty_pool="Inducing skipped: empty item pool.",
+        induction_written="Inducing wrote {count} dimensions to codebook/dimensions.json.",
         run_not_initialized="Run not initialized.",
-        no_kevin_batches="No Kevin batches to process.",
+        no_axial_coding_batches="No AxialCoding batches to process.",
         invalid_batch_index="Invalid batch_index={batch_index}; valid range 1..{total}.",
-        kevin_summary="Kevin processed {processed} batch(es); dimensions={dimensions}.",
+        axial_coding_summary="AxialCoding processed {processed} batch(es); dimensions={dimensions}.",
         export_missing_run="Run not initialized; nothing to export.",
         export_result="Exported code-agent compatible result to {path}.",
         eval_no_results="No evaluation results yet. Run /eval:open first.",
         eval_benchmark_missing="Human benchmark is not ready. Confirm the seed files exist under flex-agent/data/ and restart the CLI.",
-        eval_no_coded_texts="No coded texts yet. Run Bob coding (batch_bob_code) before evaluation.",
+        eval_no_coded_texts="No coded texts yet. Run OpenCoding (batch_open_coding) before evaluation.",
         eval_start="[eval] Starting mode={mode}; coded texts={coded_count}",
         eval_load_benchmark="[eval] Loading human benchmark: {path}",
         eval_aligned_pairs="[eval] Aligned {pairs} pairs (agent={coded_count}, human={human_count}, agent_only={agent_only})",
@@ -699,7 +731,7 @@ EN_BUNDLE = TextBundle(
         semantic_skip="[eval] semantic skipped text_id={text_id}: {error!r}",
         semantic_progress="[eval] semantic {done}/{pending} complete (total {complete}/{total}): C={consistency:.1%} P={precision:.1%} R={recall:.1%}",
         axial_no_results="No axial evaluation results yet. Run /eval:axial first.",
-        axial_no_dimensions="No codebook dimensions yet. Run Alice/Kevin to generate codebook/dimensions.json first.",
+        axial_no_dimensions="No codebook dimensions yet. Run Inducing/AxialCoding to generate codebook/dimensions.json first.",
         axial_no_valid_dimensions="The codebook has no valid axial dimension names.",
         axial_start="[eval:axial] Starting workspace evaluation mode={mode}: codebook {agent_count} dimensions vs {human_count} human categories",
         axial_category_mapping="[eval:axial] LLM category mapping: {count} agent axial dimensions",

@@ -9,7 +9,7 @@ from typing import Any, List, Type, TypeVar
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, Field, create_model, model_validator
 
 from flex_agent.i18n import Language, get_bundle, get_language, resolve_language
 from flex_agent.llm.structured_output import ainvoke_structured
@@ -22,10 +22,26 @@ ModelT = TypeVar("ModelT", bound=BaseModel)
 class PromptContext(BaseModel):
     grounded_theory_background: str
     task_background: str
-    bob_template: str
-    alice_template: str
-    kevin_template: str
+    open_coding_template: str
+    induction_template: str
+    axial_refinement_template: str
     language: Language = "zh"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_legacy_template_names(cls, data):
+        if not isinstance(data, dict):
+            return data
+        migrated = dict(data)
+        legacy_map = {
+            "open_coding_template": "bob_template",
+            "induction_template": "alice_template",
+            "axial_refinement_template": "kevin_template",
+        }
+        for canonical, legacy in legacy_map.items():
+            if canonical not in migrated and legacy in migrated:
+                migrated[canonical] = migrated[legacy]
+        return migrated
 
     @classmethod
     def load(cls, prompts_dir: Path | None = None, *, language: str | None = None) -> "PromptContext":
@@ -35,77 +51,133 @@ class PromptContext(BaseModel):
         return cls(
             grounded_theory_background=gt_background,
             task_background=task_background,
-            bob_template=read_prompt_file("agent_bob.md", prompts_dir=prompts_dir).format(
+            open_coding_template=read_prompt_file(
+                "open_coding.md",
+                prompts_dir=prompts_dir,
+                legacy_filename="agent_bob.md",
+            ).format(
                 grounded_theory_background=gt_background,
                 task_background=task_background,
             ),
-            alice_template=read_prompt_file("agent_alice.md", prompts_dir=prompts_dir).format(
+            induction_template=read_prompt_file(
+                "construct_induction.md",
+                prompts_dir=prompts_dir,
+                legacy_filename="agent_alice.md",
+            ).format(
                 grounded_theory_background=gt_background,
                 task_background=task_background,
             ),
-            kevin_template=read_prompt_file("agent_kevin.md", prompts_dir=prompts_dir).format(
+            axial_refinement_template=read_prompt_file(
+                "axial_refinement.md",
+                prompts_dir=prompts_dir,
+                legacy_filename="agent_kevin.md",
+            ).format(
                 grounded_theory_background=gt_background,
                 task_background=task_background,
             ),
             language=active_language,
         )
 
+    @property
+    def bob_template(self) -> str:
+        return self.open_coding_template
+
+    @property
+    def alice_template(self) -> str:
+        return self.induction_template
+
+    @property
+    def kevin_template(self) -> str:
+        return self.axial_refinement_template
+
 
 _DEFAULT_SCHEMA_DESCRIPTIONS = get_bundle("zh").llm.schema_descriptions
 
 
-class BobItemDetail(BaseModel):
-    name: str = Field(description=_DEFAULT_SCHEMA_DESCRIPTIONS["bob_item_name"])
+class OpenCodingItemDetail(BaseModel):
+    name: str = Field(description=_DEFAULT_SCHEMA_DESCRIPTIONS["open_coding_item_name"])
     evidence: str | None = Field(
         default=None,
-        description=_DEFAULT_SCHEMA_DESCRIPTIONS["bob_item_evidence"],
+        description=_DEFAULT_SCHEMA_DESCRIPTIONS["open_coding_item_evidence"],
     )
-    normalized_label: str = Field(description=_DEFAULT_SCHEMA_DESCRIPTIONS["bob_item_normalized_label"])
+    normalized_label: str = Field(description=_DEFAULT_SCHEMA_DESCRIPTIONS["open_coding_item_normalized_label"])
     reason: str | None = Field(
         default=None,
-        description=_DEFAULT_SCHEMA_DESCRIPTIONS["bob_item_reason"],
+        description=_DEFAULT_SCHEMA_DESCRIPTIONS["open_coding_item_reason"],
     )
 
 
-class BobOutput(BaseModel):
+class OpenCodingOutput(BaseModel):
     content_with_labels: str = Field(
-        description=_DEFAULT_SCHEMA_DESCRIPTIONS["bob_content_with_labels"]
+        description=_DEFAULT_SCHEMA_DESCRIPTIONS["open_coding_content_with_labels"]
     )
-    items: List[BobItemDetail] = Field(default_factory=list)
+    items: List[OpenCodingItemDetail] = Field(default_factory=list)
 
 
-class AliceDimensionDetail(BaseModel):
-    name: str = Field(description=_DEFAULT_SCHEMA_DESCRIPTIONS["alice_name"])
+class InductionDimensionDetail(BaseModel):
+    name: str = Field(description=_DEFAULT_SCHEMA_DESCRIPTIONS["induction_dimension_name"])
     items: List[str] = Field(
-        description=_DEFAULT_SCHEMA_DESCRIPTIONS["alice_items"]
+        description=_DEFAULT_SCHEMA_DESCRIPTIONS["induction_dimension_items"]
     )
-    definition: str = Field(description=_DEFAULT_SCHEMA_DESCRIPTIONS["alice_definition"])
+    definition: str = Field(description=_DEFAULT_SCHEMA_DESCRIPTIONS["induction_dimension_definition"])
 
 
-class AliceOutput(BaseModel):
-    dimensions: List[AliceDimensionDetail] = Field(default_factory=list)
+class InductionOutput(BaseModel):
+    dimensions: List[InductionDimensionDetail] = Field(default_factory=list)
 
 
-class KevinDimensionDetail(BaseModel):
-    name: str = Field(description=_DEFAULT_SCHEMA_DESCRIPTIONS["kevin_name"])
+class AxialCodingDimensionDetail(BaseModel):
+    name: str = Field(description=_DEFAULT_SCHEMA_DESCRIPTIONS["axial_coding_dimension_name"])
     items: List[str] = Field(
-        description=_DEFAULT_SCHEMA_DESCRIPTIONS["kevin_items"]
+        description=_DEFAULT_SCHEMA_DESCRIPTIONS["axial_coding_dimension_items"]
     )
-    definition: str = Field(description=_DEFAULT_SCHEMA_DESCRIPTIONS["kevin_definition"])
+    definition: str = Field(description=_DEFAULT_SCHEMA_DESCRIPTIONS["axial_coding_dimension_definition"])
 
 
-class KevinOutput(BaseModel):
-    dimensions: List[KevinDimensionDetail] = Field(default_factory=list)
+class AxialCodingOutput(BaseModel):
+    dimensions: List[AxialCodingDimensionDetail] = Field(default_factory=list)
+
+
+BobItemDetail = OpenCodingItemDetail
+BobOutput = OpenCodingOutput
+AliceDimensionDetail = InductionDimensionDetail
+AliceOutput = InductionOutput
+KevinDimensionDetail = AxialCodingDimensionDetail
+KevinOutput = AxialCodingOutput
 
 
 @dataclass(frozen=True)
 class AgentSchemaModels:
-    bob_item: type[BaseModel]
-    bob_output: type[BaseModel]
-    alice_dimension: type[BaseModel]
-    alice_output: type[BaseModel]
-    kevin_dimension: type[BaseModel]
-    kevin_output: type[BaseModel]
+    open_coding_item: type[BaseModel]
+    open_coding_output: type[BaseModel]
+    induction_dimension: type[BaseModel]
+    induction_output: type[BaseModel]
+    axial_coding_dimension: type[BaseModel]
+    axial_coding_output: type[BaseModel]
+
+    @property
+    def bob_item(self) -> type[BaseModel]:
+        return self.open_coding_item
+
+    @property
+    def bob_output(self) -> type[BaseModel]:
+        return self.open_coding_output
+
+    @property
+    def alice_dimension(self) -> type[BaseModel]:
+        return self.induction_dimension
+
+    @property
+    def alice_output(self) -> type[BaseModel]:
+        return self.induction_output
+
+    @property
+    def kevin_dimension(self) -> type[BaseModel]:
+        return self.axial_coding_dimension
+
+    @property
+    def kevin_output(self) -> type[BaseModel]:
+        return self.axial_coding_output
 
 
 def get_agent_schema_models(language: str | None = None) -> AgentSchemaModels:
@@ -118,47 +190,47 @@ def _get_agent_schema_models(active_language: Language) -> AgentSchemaModels:
     descriptions = get_bundle(active_language).llm.schema_descriptions
     suffix = "Zh" if active_language == "zh" else "En"
 
-    bob_item = create_model(
-        f"BobItemDetail{suffix}",
-        name=(str, Field(description=descriptions["bob_item_name"])),
-        evidence=(str | None, Field(default=None, description=descriptions["bob_item_evidence"])),
-        normalized_label=(str, Field(description=descriptions["bob_item_normalized_label"])),
-        reason=(str | None, Field(default=None, description=descriptions["bob_item_reason"])),
+    open_coding_item = create_model(
+        f"OpenCodingItemDetail{suffix}",
+        name=(str, Field(description=descriptions["open_coding_item_name"])),
+        evidence=(str | None, Field(default=None, description=descriptions["open_coding_item_evidence"])),
+        normalized_label=(str, Field(description=descriptions["open_coding_item_normalized_label"])),
+        reason=(str | None, Field(default=None, description=descriptions["open_coding_item_reason"])),
     )
-    bob_output = create_model(
-        f"BobOutput{suffix}",
-        content_with_labels=(str, Field(description=descriptions["bob_content_with_labels"])),
-        items=(list[bob_item], Field(default_factory=list)),  # type: ignore[valid-type]
-    )
-
-    alice_dimension = create_model(
-        f"AliceDimensionDetail{suffix}",
-        name=(str, Field(description=descriptions["alice_name"])),
-        items=(list[str], Field(description=descriptions["alice_items"])),
-        definition=(str, Field(description=descriptions["alice_definition"])),
-    )
-    alice_output = create_model(
-        f"AliceOutput{suffix}",
-        dimensions=(list[alice_dimension], Field(default_factory=list)),  # type: ignore[valid-type]
+    open_coding_output = create_model(
+        f"OpenCodingOutput{suffix}",
+        content_with_labels=(str, Field(description=descriptions["open_coding_content_with_labels"])),
+        items=(list[open_coding_item], Field(default_factory=list)),  # type: ignore[valid-type]
     )
 
-    kevin_dimension = create_model(
-        f"KevinDimensionDetail{suffix}",
-        name=(str, Field(description=descriptions["kevin_name"])),
-        items=(list[str], Field(description=descriptions["kevin_items"])),
-        definition=(str, Field(description=descriptions["kevin_definition"])),
+    induction_dimension = create_model(
+        f"InductionDimensionDetail{suffix}",
+        name=(str, Field(description=descriptions["induction_dimension_name"])),
+        items=(list[str], Field(description=descriptions["induction_dimension_items"])),
+        definition=(str, Field(description=descriptions["induction_dimension_definition"])),
     )
-    kevin_output = create_model(
-        f"KevinOutput{suffix}",
-        dimensions=(list[kevin_dimension], Field(default_factory=list)),  # type: ignore[valid-type]
+    induction_output = create_model(
+        f"InductionOutput{suffix}",
+        dimensions=(list[induction_dimension], Field(default_factory=list)),  # type: ignore[valid-type]
+    )
+
+    axial_coding_dimension = create_model(
+        f"AxialCodingDimensionDetail{suffix}",
+        name=(str, Field(description=descriptions["axial_coding_dimension_name"])),
+        items=(list[str], Field(description=descriptions["axial_coding_dimension_items"])),
+        definition=(str, Field(description=descriptions["axial_coding_dimension_definition"])),
+    )
+    axial_coding_output = create_model(
+        f"AxialCodingOutput{suffix}",
+        dimensions=(list[axial_coding_dimension], Field(default_factory=list)),  # type: ignore[valid-type]
     )
     return AgentSchemaModels(
-        bob_item=bob_item,
-        bob_output=bob_output,
-        alice_dimension=alice_dimension,
-        alice_output=alice_output,
-        kevin_dimension=kevin_dimension,
-        kevin_output=kevin_output,
+        open_coding_item=open_coding_item,
+        open_coding_output=open_coding_output,
+        induction_dimension=induction_dimension,
+        induction_output=induction_output,
+        axial_coding_dimension=axial_coding_dimension,
+        axial_coding_output=axial_coding_output,
     )
 
 
@@ -182,15 +254,15 @@ def _format_dimensions_json(existing_dimensions: list[DimensionDetail]) -> str:
     )
 
 
-async def arun_bob(
+async def arun_open_coding(
     llm: BaseChatModel,
     prompt_ctx: PromptContext,
     text: TextItem,
-) -> BobOutput:
-    schema = get_agent_schema_models(prompt_ctx.language).bob_output
+) -> OpenCodingOutput:
+    schema = get_agent_schema_models(prompt_ctx.language).open_coding_output
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", prompt_ctx.bob_template),
+            ("system", prompt_ctx.open_coding_template),
             ("human", "text_id: {text_id}\ncontent: {content}"),
         ]
     )
@@ -201,16 +273,16 @@ async def arun_bob(
         payload={"text_id": text.id, "content": text.content},
         component="coding-default",
     )
-    return BobOutput.model_validate(parsed.model_dump())
+    return OpenCodingOutput.model_validate(parsed.model_dump())
 
 
-async def arun_alice(
+async def arun_induction(
     llm: BaseChatModel,
     prompt_ctx: PromptContext,
     items_pool: List[str],
     items_details: ItemDetailInput | None = None,
-) -> AliceOutput:
-    schema = get_agent_schema_models(prompt_ctx.language).alice_output
+) -> InductionOutput:
+    schema = get_agent_schema_models(prompt_ctx.language).induction_output
     if items_details:
         human_content = "items_details JSON:\n{items_details}"
         payload = {"items_details": _json_prompt_value(items_details)}
@@ -220,7 +292,7 @@ async def arun_alice(
 
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", prompt_ctx.alice_template),
+            ("system", prompt_ctx.induction_template),
             ("human", human_content),
         ]
     )
@@ -231,17 +303,17 @@ async def arun_alice(
         payload=payload,
         component="coding-pro",
     )
-    return AliceOutput.model_validate(parsed.model_dump())
+    return InductionOutput.model_validate(parsed.model_dump())
 
 
-async def arun_kevin(
+async def arun_axial_coding(
     llm: BaseChatModel,
     prompt_ctx: PromptContext,
     existing_dimensions: List[DimensionDetail],
     items_pool: List[str],
     items_details: ItemDetailInput | None = None,
-) -> KevinOutput:
-    schema = get_agent_schema_models(prompt_ctx.language).kevin_output
+) -> AxialCodingOutput:
+    schema = get_agent_schema_models(prompt_ctx.language).axial_coding_output
     if items_details:
         human_content = (
             "current_dimensions JSON:\n{current_dimensions}\n\n"
@@ -263,7 +335,7 @@ async def arun_kevin(
 
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", prompt_ctx.kevin_template),
+            ("system", prompt_ctx.axial_refinement_template),
             ("human", human_content),
         ]
     )
@@ -274,4 +346,9 @@ async def arun_kevin(
         payload=payload,
         component="coding-pro",
     )
-    return KevinOutput.model_validate(parsed.model_dump())
+    return AxialCodingOutput.model_validate(parsed.model_dump())
+
+
+arun_bob = arun_open_coding
+arun_alice = arun_induction
+arun_kevin = arun_axial_coding

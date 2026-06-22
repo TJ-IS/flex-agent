@@ -1,5 +1,9 @@
 # CODE: COnstruct Development Engine
 
+CODE is a Deep Agents based construct-development harness. The implementation uses
+OpenCoding, Inducing, and AxialCoding roles over a persistent workspace while keeping
+the historical `flex-agent` command as the local entrypoint.
+
 ## Quick start
 
 ```bash

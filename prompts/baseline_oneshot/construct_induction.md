@@ -1,8 +1,8 @@
-# Agent Alice
+# Inducing Subagent
 
 ## 角色
 
-你是 **Alice**，负责将首轮开放式编码生成的中文条目标签归纳为稳定的维度层级代码本。
+你是 **Inducing** 子代理，负责将首轮开放式编码生成的中文条目标签归纳为稳定的维度层级代码本。
 
 ## 背景
 
@@ -38,7 +38,7 @@
 
 ## 示例
 
-下面示例使用 `arun_alice()` 的实际输入形式和 `AliceOutput` 的结构化输出形式。
+下面示例使用 `arun_induction()` 的实际输入形式和 `InductionOutput` 的结构化输出形式。
 
 输入：
 

@@ -16,22 +16,22 @@ class StreamEventParserTests(unittest.TestCase):
             content="",
             tool_calls=[
                 {
-                    "name": "batch_bob_code",
+                    "name": "batch_open_coding",
                     "args": {"text_ids": [1, 2, 3]},
                     "id": "call-1",
                 }
             ],
         )
-        tool = ToolMessage(content="Bob coded 3/3 texts.", tool_call_id="call-1")
+        tool = ToolMessage(content="OpenCoding processed 3/3 texts.", tool_call_id="call-1")
 
         first = parser.consume({"messages": [ai]})
         self.assertEqual(len(first.timeline), 1)
-        self.assertIn("Bob 批量编码", first.timeline[0].text)
+        self.assertIn("OpenCoding 批量编码", first.timeline[0].text)
         self.assertEqual(parser.steps["call-1"].status, StepStatus.RUNNING)
 
         second = parser.consume({"messages": [ai, tool]})
         self.assertEqual(parser.steps["call-1"].status, StepStatus.DONE)
-        self.assertTrue(any("Bob coded" in entry.text for entry in second.timeline))
+        self.assertTrue(any("OpenCoding processed" in entry.text for entry in second.timeline))
         self.assertTrue(second.refresh_workspace)
 
     def test_todos_are_parsed_from_state(self) -> None:
@@ -41,13 +41,13 @@ class StreamEventParserTests(unittest.TestCase):
                 "messages": [],
                 "todos": [
                     {"content": "init corpus", "status": "completed"},
-                    {"content": "batch bob", "status": "in_progress"},
+                    {"content": "batch open coding", "status": "in_progress"},
                 ],
             }
         )
         self.assertEqual(len(update.todos), 2)
         self.assertEqual(update.todos[0].status, "completed")
-        self.assertEqual(update.todos[1].content, "batch bob")
+        self.assertEqual(update.todos[1].content, "batch open coding")
 
     def test_human_and_assistant_messages(self) -> None:
         parser = StreamEventParser()
@@ -123,8 +123,9 @@ class ToolLabelTests(unittest.TestCase):
         try:
             set_language("en")
             self.assertEqual(tool_label("init_open_coding_run"), "Initialize corpus")
+            self.assertEqual(tool_label("batch_bob_code"), "Batch OpenCoding")
             self.assertEqual(
-                summarize_tool_args("batch_bob_code", {"text_ids": [1, 2]}),
+                summarize_tool_args("batch_open_coding", {"text_ids": [1, 2]}),
                 "2 texts",
             )
         finally:
@@ -133,9 +134,9 @@ class ToolLabelTests(unittest.TestCase):
     def test_task_summary(self) -> None:
         summary = summarize_tool_args(
             "task",
-            {"subagent_type": "alice-codebook", "description": "review codebook"},
+            {"subagent_type": "construct-induction", "description": "review codebook"},
         )
-        self.assertIn("alice-codebook", summary)
+        self.assertIn("construct-induction", summary)
 
 
 if __name__ == "__main__":
