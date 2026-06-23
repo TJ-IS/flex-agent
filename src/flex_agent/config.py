@@ -220,6 +220,24 @@ def build_llm(
         seed_raw = os.getenv("OPENAI_SEED", "42").strip()
         seed = int(seed_raw) if seed_raw else None
     base_url = os.getenv("OPENAI_BASE_URL") or None
+    if base_url:
+        base_url = base_url.strip()
+        # Automatically append '/v1' to OPENAI_BASE_URL if it's a custom proxy/endpoint
+        # and doesn't end with '/v1' (ignoring trailing slashes).
+        # This prevents the common 'AttributeError: str object has no attribute model_dump'
+        # error caused by proxies returning HTML error/welcome pages (strings) instead of JSON.
+        normalized = base_url.rstrip("/")
+        if normalized and not normalized.endswith("/v1") and not normalized.endswith("/v1/"):
+            # Check if it's a standard web URL (http/https)
+            if normalized.startswith("http://") or normalized.startswith("https://"):
+                old_base_url = base_url
+                base_url = f"{normalized}/v1"
+                print(
+                    f"⚠️  [Warning] OPENAI_BASE_URL '{old_base_url}' does not end with '/v1'. "
+                    f"Automatically appended '/v1' -> '{base_url}' to prevent LangChain parsing errors.",
+                    file=sys.stderr,
+                    flush=True,
+                )
     return _build_llm_cached(model_name, timeout, max_retries, seed, base_url)
 
 
