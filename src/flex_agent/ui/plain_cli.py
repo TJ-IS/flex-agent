@@ -297,6 +297,7 @@ async def run_plain_cli(
             print(style(f"\n{cli_text.interrupted}", TermStyle.YELLOW), flush=True)
             renderer.render_workspace_status(workspace)
         except Exception as exc:
+            import traceback
             update = parser.mark_error(exc)
             # region agent log
             agent_debug_log(
@@ -306,6 +307,7 @@ async def run_plain_cli(
                 data={
                     "error_type": type(exc).__name__,
                     "error": repr(exc),
+                    "traceback": traceback.format_exc(),
                     "running_steps": [
                         {"tool_name": step.tool_name, "summary": step.summary}
                         for step in parser.steps.values()
