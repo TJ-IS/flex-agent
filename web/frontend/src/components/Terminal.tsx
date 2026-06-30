@@ -26,6 +26,7 @@ import type {
 import { InputBar } from "./InputBar";
 import { StreamingLine } from "./StreamingLine";
 import { WorkspaceEditor } from "./WorkspaceEditor";
+import { WorkspaceViewer } from "./WorkspaceViewer";
 import { Timeline } from "./Timeline";
 import { Todos } from "./Todos";
 
@@ -62,6 +63,7 @@ export function Terminal({
   const [busy, setBusy] = useState(false);
   const [frameIndex, setFrameIndex] = useState(0);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const lastWorkspaceSummaryRef = useRef<string | null>(null);
 
@@ -381,14 +383,24 @@ export function Terminal({
               />
             )}
           </Stack>
-          <Button
-            size="small"
-            variant="outlined"
-            onClick={() => setEditorOpen(true)}
-            sx={toolbarButtonSx}
-          >
-            编辑
-          </Button>
+          <Stack direction="row" spacing={0.75}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => setViewerOpen(true)}
+              sx={toolbarButtonSx}
+            >
+              查看
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => setEditorOpen(true)}
+              sx={toolbarButtonSx}
+            >
+              编辑
+            </Button>
+          </Stack>
         </Stack>
       </Box>
 
@@ -452,6 +464,11 @@ export function Terminal({
         sessionId={sessionId}
         open={editorOpen}
         onClose={() => setEditorOpen(false)}
+      />
+      <WorkspaceViewer
+        sessionId={sessionId}
+        open={viewerOpen}
+        onClose={() => setViewerOpen(false)}
       />
     </Box>
   );

@@ -32,6 +32,53 @@ export async function getSession(sessionId: string): Promise<SessionDetail> {
   return request<SessionDetail>(`/api/sessions/${encodeURIComponent(sessionId)}`);
 }
 
+export interface DimensionItem {
+  name: string;
+  items: string[];
+  definition?: string;
+}
+
+export interface CodingItem {
+  name: string;
+  evidence?: string;
+  normalized_label?: string;
+  reason?: string | null;
+}
+
+export interface CodingResult {
+  id: number;
+  content: string;
+  content_with_labels?: string;
+  items: CodingItem[];
+}
+
+export interface CorpusPreviewItem {
+  id: number;
+  text: string;
+}
+
+export interface WorkspacePartition {
+  codebook_text_ids: number[];
+  kevin_text_ids: number[];
+}
+
+export interface WorkspaceOverview {
+  status: Record<string, unknown>;
+  dimensions: DimensionItem[];
+  coding: CodingResult[];
+  eval_open: Record<string, unknown> | null;
+  eval_axial: Record<string, unknown> | null;
+  partition: WorkspacePartition | null;
+  quality_warnings: Record<string, unknown> | null;
+  corpus_preview: CorpusPreviewItem[];
+}
+
+export async function getWorkspaceOverview(sessionId: string): Promise<WorkspaceOverview> {
+  return request<WorkspaceOverview>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/workspace/overview`,
+  );
+}
+
 export async function deleteSession(sessionId: string): Promise<void> {
   await request<{ status: string }>(
     `/api/sessions/${encodeURIComponent(sessionId)}`,

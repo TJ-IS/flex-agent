@@ -4,15 +4,20 @@ import {
   Button,
   Chip,
   Divider,
+  IconButton,
   List,
   ListItemButton,
   ListItemText,
   Stack,
+  Tooltip,
   Typography,
 } from "@mui/material";
+import GitHubIcon from "@mui/icons-material/GitHub";
 import { terminalColors } from "../theme";
 import type { SessionSummary } from "../types";
 import { ConfirmDialog } from "./ConfirmDialog";
+
+const GITHUB_URL = "https://github.com/TJ-IS/flex-agent";
 
 export interface SidebarContentProps {
   sessions: SessionSummary[];
@@ -36,9 +41,23 @@ export function SidebarContent({
   return (
     <>
       <Box sx={{ p: 2 }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
-          CODE
-        </Typography>
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
+            CODE
+          </Typography>
+          <Tooltip title="GitHub 仓库" arrow>
+            <IconButton
+              size="small"
+              component="a"
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              sx={{ color: terminalColors.gray, "&:hover": { color: terminalColors.text } }}
+            >
+              <GitHubIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Tooltip>
+        </Stack>
         <Typography variant="caption" sx={{ color: terminalColors.gray, display: "block" }}>
           COnstruct Development Engine
         </Typography>

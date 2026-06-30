@@ -24,9 +24,12 @@ import {
   Typography,
 } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import GitHubIcon from "@mui/icons-material/GitHub";
 import { createSession, getSession, languageForPromptSet } from "../api";
 import { cardSx, sectionAccentSx, terminalColors } from "../theme";
 import type { EnvMode, PromptSet, SessionDetail, SessionSummary } from "../types";
+
+const GITHUB_URL = "https://github.com/TJ-IS/flex-agent";
 
 interface EntryScreenProps {
   loading: boolean;
@@ -136,20 +139,41 @@ export function EntryScreen({
     >
       <Stack spacing={3} sx={{ width: "100%", maxWidth: 720 }}>
         <Box sx={{ textAlign: "center", pt: 1, pb: 0.5 }}>
-          <Typography
-            variant="h4"
-            sx={{
-              fontWeight: 700,
-              letterSpacing: "-0.02em",
-              pb: 1.5,
-              background: `linear-gradient(90deg, transparent, ${terminalColors.cyan}, transparent)`,
-              backgroundSize: "100% 1px",
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: "bottom",
-            }}
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="center"
+            gap={1.5}
+            sx={{ pb: 1.5 }}
           >
-            CODE: COnstruct Development Engine
-          </Typography>
+            <Typography
+              variant="h4"
+              sx={{
+                fontWeight: 700,
+                letterSpacing: "-0.02em",
+                background: `linear-gradient(90deg, transparent, ${terminalColors.cyan}, transparent)`,
+                backgroundSize: "100% 1px",
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "bottom",
+              }}
+            >
+              CODE: COnstruct Development Engine
+            </Typography>
+            <Tooltip title="GitHub 仓库" arrow>
+              <IconButton
+                component="a"
+                href={GITHUB_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{
+                  color: terminalColors.gray,
+                  "&:hover": { color: terminalColors.text },
+                }}
+              >
+                <GitHubIcon />
+              </IconButton>
+            </Tooltip>
+          </Stack>
         </Box>
 
         {!loading && recentSessions.length > 0 && (

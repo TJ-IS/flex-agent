@@ -90,6 +90,15 @@ def create_app() -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @app.get("/api/sessions/{session_id}/workspace/overview")
+    def get_workspace_overview(session_id: str) -> dict[str, Any]:
+        try:
+            return session_manager.get_workspace_overview(session_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @app.delete("/api/sessions/{session_id}")
     def delete_session(session_id: str) -> dict[str, str]:
         try:

@@ -64,6 +64,42 @@ def _apply_web_corpus_subset(workspace: Workspace) -> None:
         shutil.copy2(src, dest)
 
 
+def _read_json_file(path: Path, default: Any) -> Any:
+    if not path.exists() or not path.is_file():
+        return default
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, TypeError):
+        return default
+
+
+def _read_corpus_preview(path: Path, *, limit: int = 50) -> list[dict[str, Any]]:
+    if not path.exists() or not path.is_file():
+        return []
+    preview: list[dict[str, Any]] = []
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            for raw_line in handle:
+                if len(preview) >= limit:
+                    break
+                line = raw_line.strip()
+                if not line:
+                    continue
+                record = json.loads(line)
+                if not isinstance(record, dict):
+                    continue
+                text_id = record.get("id")
+                text = str(
+                    record.get("comments") or record.get("content") or record.get("text") or ""
+                )
+                if text_id is None:
+                    continue
+                preview.append({"id": text_id, "text": text})
+    except (json.JSONDecodeError, OSError, TypeError):
+        return []
+    return preview
+
+
 agent_turn_lock = asyncio.Lock()
 _runtime_build_lock = threading.Lock()
 
@@ -331,6 +367,19 @@ class SessionManager:
         payload = self._session_payload(session_id, workspace, language, env_mode, prompt_set)
         payload["meta"] = meta.model_dump() if meta else None
         return payload
+
+    def get_workspace_overview(self, session_id: str) -> dict[str, Any]:
+        workspace = self.get_workspace(session_id)
+        return {
+            "status": workspace.status(),
+            "dimensions": _read_json_file(workspace.codebook_dir / "dimensions.json", []),
+            "coding": [item.model_dump() for item in workspace.load_finished_texts()],
+            "eval_open": _read_json_file(workspace.eval_open_dir / "summary.json", None),
+            "eval_axial": _read_json_file(workspace.eval_axial_dir / "global.json", None),
+            "partition": _read_json_file(workspace.corpus_dir / "partition.json", None),
+            "quality_warnings": _read_json_file(workspace.quality_dir / "warnings.json", None),
+            "corpus_preview": _read_corpus_preview(workspace.corpus_seed_path, limit=50),
+        }
 
     def _session_payload(
         self,
