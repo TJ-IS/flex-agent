@@ -22,7 +22,15 @@ from flex_agent.coding.quality import (
     extract_item_pool,
     normalize_finished_text,
 )
-from flex_agent.config import build_llm, get_prompts_dir, load_model_config, path_label
+from flex_agent.config import (
+    build_llm,
+    get_prompts_dir,
+    load_model_config,
+    load_open_coding_concurrency,
+    load_seed_pool_size,
+    load_update_batch_size,
+    path_label,
+)
 from flex_agent.debug_log import agent_debug_log
 from flex_agent.i18n import Language, get_bundle, get_language, resolve_language
 from flex_agent.models import DimensionDetail, FinishedItemDetail, FinishedTextItem
@@ -44,9 +52,18 @@ class InitRunInput(BaseModel):
             "(e.g. /corpus/codebook_done.jsonl). Do not pass corpus/raw.jsonl."
         ),
     )
-    max_nums: int = Field(default=10, description="Maximum number of texts to process.")
-    codebook_nums: int = Field(default=5, description="Number of texts for the Inducing seed pool.")
-    kevin_batch_size: int = Field(default=5, description="AxialCoding update-pool batch size.")
+    max_nums: int = Field(
+        default=0,
+        description="Maximum number of texts to process. 0 means use all valid rows in data_path.",
+    )
+    codebook_nums: int = Field(
+        default_factory=load_seed_pool_size,
+        description="Number of texts for the Inducing seed pool.",
+    )
+    kevin_batch_size: int = Field(
+        default_factory=load_update_batch_size,
+        description="AxialCoding update-pool batch size.",
+    )
     sample_mode: str = Field(default="sequential", description="sequential or random sampling.")
     random_seed: int | None = Field(default=None, description="Random seed for sampling/partition.")
     open_mode: str = Field(default="pure", description="Open coding mode label for export metadata.")
@@ -57,7 +74,10 @@ class BatchOpenCodingInput(BaseModel):
         default=None,
         description="Optional explicit text ids. Defaults to all texts in queue.",
     )
-    concurrency_limit: int = Field(default=10, description="Max concurrent OpenCoding calls.")
+    concurrency_limit: int = Field(
+        default_factory=load_open_coding_concurrency,
+        description="Max concurrent OpenCoding calls.",
+    )
 
 
 class AxialCodingBatchInput(BaseModel):
@@ -102,12 +122,18 @@ class ToolInputSchemas:
 def _tool_input_schemas(language: str | None = None) -> ToolInputSchemas:
     descriptions = get_bundle(language).llm.tool_arg_descriptions
     suffix = "Zh" if (resolve_language(language) if language is not None else get_language()) == "zh" else "En"
+    default_concurrency = load_open_coding_concurrency()
+    default_seed_pool = load_seed_pool_size()
+    default_update_batch = load_update_batch_size()
     init_run = create_model(
         f"InitRunInput{suffix}",
         data_path=(str, Field(description=descriptions["data_path"])),
-        max_nums=(int, Field(default=10, description=descriptions["max_nums"])),
-        codebook_nums=(int, Field(default=5, description=descriptions["codebook_nums"])),
-        kevin_batch_size=(int, Field(default=5, description=descriptions["kevin_batch_size"])),
+        max_nums=(int, Field(default=0, description=descriptions["max_nums"])),
+        codebook_nums=(int, Field(default=default_seed_pool, description=descriptions["codebook_nums"])),
+        kevin_batch_size=(
+            int,
+            Field(default=default_update_batch, description=descriptions["kevin_batch_size"]),
+        ),
         sample_mode=(str, Field(default="sequential", description=descriptions["sample_mode"])),
         random_seed=(int | None, Field(default=None, description=descriptions["random_seed"])),
         open_mode=(str, Field(default="pure", description=descriptions["open_mode"])),
@@ -115,7 +141,10 @@ def _tool_input_schemas(language: str | None = None) -> ToolInputSchemas:
     batch_open_coding = create_model(
         f"BatchOpenCodingInput{suffix}",
         text_ids=(list[int] | None, Field(default=None, description=descriptions["text_ids"])),
-        concurrency_limit=(int, Field(default=10, description=descriptions["concurrency_limit"])),
+        concurrency_limit=(
+            int,
+            Field(default=default_concurrency, description=descriptions["concurrency_limit"]),
+        ),
     )
     axial_coding_batch = create_model(
         f"AxialCodingBatchInput{suffix}",
@@ -220,9 +249,9 @@ def build_coding_tools(ctx: CodingToolContext) -> list[StructuredTool]:
 
     async def init_open_coding_run(
         data_path: str,
-        max_nums: int = 10,
-        codebook_nums: int = 5,
-        kevin_batch_size: int = 5,
+        max_nums: int = 0,
+        codebook_nums: int | None = None,
+        kevin_batch_size: int | None = None,
         sample_mode: str = "sequential",
         random_seed: int | None = None,
         open_mode: str = "pure",
@@ -232,8 +261,10 @@ def build_coding_tools(ctx: CodingToolContext) -> list[StructuredTool]:
             meta = ctx.workspace.init_run(
                 data_path=resolved,
                 max_nums=max_nums,
-                codebook_nums=codebook_nums,
-                kevin_batch_size=kevin_batch_size,
+                codebook_nums=codebook_nums if codebook_nums is not None else load_seed_pool_size(),
+                kevin_batch_size=(
+                    kevin_batch_size if kevin_batch_size is not None else load_update_batch_size()
+                ),
                 sample_mode=sample_mode,
                 random_seed=random_seed,
                 open_mode=open_mode,
@@ -244,6 +275,7 @@ def build_coding_tools(ctx: CodingToolContext) -> list[StructuredTool]:
             partition = ctx.workspace.load_partition()
             return progress.initialized_run.format(
                 max_nums=meta.max_nums,
+                source_total=meta.source_total or meta.max_nums,
                 codebook=len(partition.seed_text_ids),
                 update=len(partition.update_text_ids),
             )
@@ -252,7 +284,7 @@ def build_coding_tools(ctx: CodingToolContext) -> list[StructuredTool]:
 
     async def batch_open_coding(
         text_ids: list[int] | None = None,
-        concurrency_limit: int = 10,
+        concurrency_limit: int | None = None,
     ) -> str:
         texts = {text.id: text for text in ctx.workspace.load_texts()}
         target_ids = text_ids or ctx.workspace.load_queue()
@@ -260,7 +292,7 @@ def build_coding_tools(ctx: CodingToolContext) -> list[StructuredTool]:
             return progress.no_texts_to_code
 
         total = len(target_ids)
-        limit = max(1, concurrency_limit)
+        limit = max(1, concurrency_limit if concurrency_limit is not None else load_open_coding_concurrency())
         sem = asyncio.Semaphore(limit)
         lock = asyncio.Lock()
         warnings = QualityWarnings()
@@ -339,7 +371,7 @@ def build_coding_tools(ctx: CodingToolContext) -> list[StructuredTool]:
 
     async def batch_bob_code(
         text_ids: list[int] | None = None,
-        concurrency_limit: int = 10,
+        concurrency_limit: int | None = None,
     ) -> str:
         return await batch_open_coding(text_ids=text_ids, concurrency_limit=concurrency_limit)
 

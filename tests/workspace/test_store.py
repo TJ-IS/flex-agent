@@ -12,6 +12,28 @@ from flex_agent.workspace import Workspace, load_comments_from_jsonl
 
 
 class WorkspaceTests(unittest.TestCase):
+    def test_init_run_max_nums_zero_uses_all(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            data_path = root / "data.jsonl"
+            data_path.write_text(
+                "\n".join(
+                    json.dumps({"comments": f"comment {idx}"}, ensure_ascii=False)
+                    for idx in range(1, 8)
+                ),
+                encoding="utf-8",
+            )
+            ws = Workspace(root / "workspace")
+            meta = ws.init_run(
+                data_path=data_path,
+                max_nums=0,
+                codebook_nums=2,
+                kevin_batch_size=2,
+            )
+            self.assertEqual(meta.max_nums, 7)
+            self.assertEqual(meta.source_total, 7)
+            self.assertEqual(len(ws.load_texts()), 7)
+
     def test_init_run_writes_expected_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

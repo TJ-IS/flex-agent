@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from flex_agent.coding.agents import OpenCodingItemDetail, OpenCodingOutput, PromptContext
+from flex_agent.config import load_open_coding_concurrency
 from flex_agent.orchestration.tools import CodingToolContext, build_coding_tools
 from flex_agent.workspace import Workspace
 
@@ -82,7 +83,10 @@ class BatchOpenCodingProgressTests(unittest.TestCase):
                 result = asyncio.run(_batch_open_coding_tool(ctx).coroutine())
 
             self.assertIn("OpenCoding processed 3/3 texts", result)
-            self.assertEqual(messages[0], "[OpenCoding] 开始编码 3 条 (concurrency=10)")
+            self.assertEqual(
+                messages[0],
+                f"[OpenCoding] 开始编码 3 条 (concurrency={load_open_coding_concurrency()})",
+            )
             completion_lines = [line for line in messages if line.startswith("[OpenCoding] 完成")]
             self.assertEqual(len(completion_lines), 3)
             for line in completion_lines:

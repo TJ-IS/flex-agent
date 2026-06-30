@@ -255,12 +255,15 @@ class Workspace:
         if not comments:
             raise RuntimeError(f"No valid comments found in {data_path}")
 
+        source_total = len(comments)
+        take = source_total if max_nums <= 0 else max(1, min(max_nums, source_total))
+
         if sample_mode == "random":
             rng = random.Random(random_seed)
             comments = list(comments)
             rng.shuffle(comments)
 
-        selected = comments[: max(1, min(max_nums, len(comments)))]
+        selected = comments[:take]
         texts = [TextItem(id=idx + 1, content=content) for idx, content in enumerate(selected)]
         self.save_texts(texts)
 
@@ -272,6 +275,7 @@ class Workspace:
         meta = RunMeta(
             data_path=str(data_path),
             max_nums=len(texts),
+            source_total=source_total,
             codebook_nums=len(codebook_ids),
             kevin_batch_size=kevin_batch_size,
             open_mode=open_mode,

@@ -142,6 +142,45 @@ def warn_langsmith_tracing() -> None:
     )
 
 
+def load_open_coding_concurrency(default: int = 40) -> int:
+    raw = os.getenv("FLEX_AGENT_OPEN_CODING_CONCURRENCY", str(default)).strip()
+    try:
+        limit = int(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"FLEX_AGENT_OPEN_CODING_CONCURRENCY must be an integer, got {raw!r}."
+        ) from exc
+    if limit < 1:
+        raise ValueError("FLEX_AGENT_OPEN_CODING_CONCURRENCY must be at least 1.")
+    return limit
+
+
+def load_seed_pool_size(default: int = 20) -> int:
+    raw = os.getenv("FLEX_AGENT_SEED_POOL_SIZE", str(default)).strip()
+    try:
+        size = int(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"FLEX_AGENT_SEED_POOL_SIZE must be an integer, got {raw!r}."
+        ) from exc
+    if size < 0:
+        raise ValueError("FLEX_AGENT_SEED_POOL_SIZE must be at least 0.")
+    return size
+
+
+def load_update_batch_size(default: int = 20) -> int:
+    raw = os.getenv("FLEX_AGENT_UPDATE_BATCH_SIZE", str(default)).strip()
+    try:
+        size = int(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"FLEX_AGENT_UPDATE_BATCH_SIZE must be an integer, got {raw!r}."
+        ) from exc
+    if size < 1:
+        raise ValueError("FLEX_AGENT_UPDATE_BATCH_SIZE must be at least 1.")
+    return size
+
+
 def load_recursion_limit(default: int = 50) -> int:
     raw = os.getenv("FLEX_AGENT_RECURSION_LIMIT", str(default)).strip()
     try:

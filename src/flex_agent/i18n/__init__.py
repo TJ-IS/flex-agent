@@ -233,6 +233,14 @@ ZH_ORCHESTRATOR_PROMPT = """你是 flex-agent 主编排器，负责自主完成 
 
 若初始化失败或 corpus 状态不一致，重新调用 `init_open_coding_run` 并指定正确的原始 data_path；不要手动改 corpus 文件。
 
+## 语料初始化规则
+
+1. 调用 `init_open_coding_run` 前，必须用 `grep`（`output_mode=count`）统计原始 `data_path` 的有效行数，记为 `source_total`。
+2. 用户要求「全部/全量」语料，或未指定数量时，传 `max_nums=0`（默认行为，使用源文件全部有效文本）。
+3. 仅当用户明确要求子集时才传正数 `max_nums`；不要用 `read_file` 预览行数代替统计。
+4. `batch_open_coding` 默认并发由环境变量 `FLEX_AGENT_OPEN_CODING_CONCURRENCY` 控制（默认 40）；全量任务保持该默认值，除非 API 限速。
+5. `init_open_coding_run` 的 seed pool（`codebook_nums`）与 update batch（`kevin_batch_size`）分别由 `FLEX_AGENT_SEED_POOL_SIZE`（默认 20）和 `FLEX_AGENT_UPDATE_BATCH_SIZE`（默认 20）控制；未指定时沿用环境变量默认值。
+
 ## 子 Agent
 
 - `open-coding`：单条文本开放式编码专家
@@ -282,6 +290,14 @@ During coding, do not read `private/` or `eval/`, and do not pass their content 
 5. `export_result`: export the evaluation-compatible result
 
 If initialization fails or corpus state is inconsistent, call `init_open_coding_run` again with the correct original `data_path`; do not manually edit corpus files.
+
+## Corpus Initialization Rules
+
+1. Before `init_open_coding_run`, use `grep` with `output_mode=count` on the original `data_path` to get `source_total`.
+2. When the user asks for the full corpus or does not specify a subset, pass `max_nums=0` (default: use all valid rows in the source file).
+3. Pass a positive `max_nums` only when the user explicitly requests a subset; do not infer row counts from `read_file` previews.
+4. `batch_open_coding` concurrency defaults to `FLEX_AGENT_OPEN_CODING_CONCURRENCY` (default 40); keep that default for full-corpus runs unless the API rate-limits you.
+5. For `init_open_coding_run`, seed pool (`codebook_nums`) and update batch size (`kevin_batch_size`) default to `FLEX_AGENT_SEED_POOL_SIZE` (20) and `FLEX_AGENT_UPDATE_BATCH_SIZE` (20) when omitted.
 
 ## Subagents
 
@@ -341,14 +357,14 @@ ZH_BUNDLE = TextBundle(
         },
         tool_arg_descriptions={
             "data_path": "源 jsonl 路径，每行包含 comments/content 字段，例如 /corpus/codebook_done.jsonl。不要传 corpus/raw.jsonl。",
-            "max_nums": "要处理的最大文本数。",
-            "codebook_nums": "用于 Inducing 初始代码本 seed pool 的文本数。",
-            "kevin_batch_size": "AxialCoding update-pool 批次大小。",
+            "max_nums": "要处理的最大文本数；0 表示使用 data_path 中的全部有效文本（默认）。",
+            "codebook_nums": "用于 Inducing 初始代码本 seed pool 的文本数（默认读取 FLEX_AGENT_SEED_POOL_SIZE，缺省 20）。",
+            "kevin_batch_size": "AxialCoding update-pool 批次大小（默认读取 FLEX_AGENT_UPDATE_BATCH_SIZE，缺省 20）。",
             "sample_mode": "采样方式：sequential 或 random。",
             "random_seed": "采样/划分随机种子。",
             "open_mode": "导出元数据中的 open coding 模式标签。",
             "text_ids": "可选的显式 text id 列表；默认使用 queue 中所有文本。",
-            "concurrency_limit": "OpenCoding 并发调用上限。",
+            "concurrency_limit": "OpenCoding 并发调用上限（默认读取 FLEX_AGENT_OPEN_CODING_CONCURRENCY，缺省 20）。",
             "batch_index": "从 1 开始的 AxialCoding 批次序号；省略则顺序运行所有批次。",
         },
         tool_descriptions={
@@ -465,7 +481,7 @@ ZH_BUNDLE = TextBundle(
         open_coding_skip="[OpenCoding] 跳过 text_id={text_id} ({done}/{total})",
         open_coding_done="[OpenCoding] 完成 text_id={text_id} ({done}/{total}) · items={items}",
         open_coding_summary="OpenCoding processed {coded}/{total} texts. Skipped={skipped}. Remaining queue={remaining}.",
-        initialized_run="Initialized run with {max_nums} texts, seed={codebook}, update={update}.",
+        initialized_run="已初始化：处理 {max_nums} 条（源文件 {source_total} 条），seed={codebook}，update={update}。",
         no_texts_to_code="No texts to code.",
         induction_empty_pool="Inducing skipped: empty item pool.",
         induction_written="Inducing wrote {count} dimensions to codebook/dimensions.json.",
@@ -577,14 +593,14 @@ EN_BUNDLE = TextBundle(
         },
         tool_arg_descriptions={
             "data_path": "Path to a source jsonl with a comments/content field per line, such as /corpus/codebook_done.jsonl. Do not pass corpus/raw.jsonl.",
-            "max_nums": "Maximum number of texts to process.",
-            "codebook_nums": "Number of texts for the Inducing seed pool.",
-            "kevin_batch_size": "AxialCoding update-pool batch size.",
+            "max_nums": "Maximum number of texts to process. 0 means use all valid rows in data_path (default).",
+            "codebook_nums": "Number of texts for the Inducing seed pool (default from FLEX_AGENT_SEED_POOL_SIZE, 20 if unset).",
+            "kevin_batch_size": "AxialCoding update-pool batch size (default from FLEX_AGENT_UPDATE_BATCH_SIZE, 20 if unset).",
             "sample_mode": "Sampling mode: sequential or random.",
             "random_seed": "Random seed for sampling and partitioning.",
             "open_mode": "Open-coding mode label for export metadata.",
             "text_ids": "Optional explicit text ids. Defaults to all texts in the queue.",
-            "concurrency_limit": "Maximum number of concurrent OpenCoding calls.",
+            "concurrency_limit": "Maximum concurrent OpenCoding calls (default from FLEX_AGENT_OPEN_CODING_CONCURRENCY, 20 if unset).",
             "batch_index": "1-based AxialCoding batch index. If omitted, runs all update-pool batches sequentially.",
         },
         tool_descriptions={
@@ -701,7 +717,7 @@ EN_BUNDLE = TextBundle(
         open_coding_skip="[OpenCoding] Skipped text_id={text_id} ({done}/{total})",
         open_coding_done="[OpenCoding] Completed text_id={text_id} ({done}/{total}) · items={items}",
         open_coding_summary="OpenCoding processed {coded}/{total} texts. Skipped={skipped}. Remaining queue={remaining}.",
-        initialized_run="Initialized run with {max_nums} texts, seed={codebook}, update={update}.",
+        initialized_run="Initialized run with {max_nums} texts (source_total={source_total}), seed={codebook}, update={update}.",
         no_texts_to_code="No texts to code.",
         induction_empty_pool="Inducing skipped: empty item pool.",
         induction_written="Inducing wrote {count} dimensions to codebook/dimensions.json.",

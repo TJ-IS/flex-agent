@@ -53,13 +53,14 @@ class DimensionDetail(BaseModel):
 
 class RunMeta(BaseModel):
     data_path: str
-    max_nums: int = 10
-    codebook_nums: int = 5
-    kevin_batch_size: int = 5
+    max_nums: int = 0
+    source_total: int | None = None
+    codebook_nums: int = 20
+    kevin_batch_size: int = 20
     open_mode: str = "pure"
     sample_mode: str = "sequential"
     random_seed: int | None = None
-    concurrency_limit: int = 10
+    concurrency_limit: int = 20
     prompts_dir: str | None = None
     workspace_dir: str | None = None
     language: str = "zh"
