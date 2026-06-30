@@ -62,11 +62,12 @@ class AgentStructuredOutputSchemaTests(unittest.TestCase):
             ensure_ascii=False,
         )
 
-        self.assertIn("concise English summary", schema_text)
-        self.assertIn("English dimension", schema_text)
+        self.assertIn("concise Chinese summary", schema_text)
+        self.assertIn("Chinese dimension", schema_text)
+        self.assertIn("Chinese item labels", schema_text)
         self.assertIn("<p>...</p>", schema_text)
-        self.assertNotIn("中文", schema_text)
-        self.assertNotIn("维度名称", schema_text)
+        self.assertNotIn("concise English summary", schema_text)
+        self.assertNotIn("English dimension", schema_text)
 
 
 if __name__ == "__main__":

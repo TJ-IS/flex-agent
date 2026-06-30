@@ -23,7 +23,10 @@ _DEFAULT_SCHEMA_DESCRIPTIONS = get_bundle("zh").llm.schema_descriptions
 
 class SemanticMatch(BaseModel):
     agent_dimension: str
-    matched_human_dimensions: list[str] = Field(default_factory=list)
+    matched_human_dimensions: list[str] = Field(
+        default_factory=list,
+        description=_DEFAULT_SCHEMA_DESCRIPTIONS["semantic_match_matched_human_dimensions"],
+    )
     thought: str = Field(default="", description=_DEFAULT_SCHEMA_DESCRIPTIONS["semantic_match_thought"])
 
 
@@ -52,7 +55,13 @@ def _get_batch_semantic_alignment_model(active_language: Language) -> type[BaseM
     semantic_match = create_model(
         f"SemanticMatch{suffix}",
         agent_dimension=(str, ...),
-        matched_human_dimensions=(list[str], Field(default_factory=list)),
+        matched_human_dimensions=(
+            list[str],
+            Field(
+                default_factory=list,
+                description=descriptions["semantic_match_matched_human_dimensions"],
+            ),
+        ),
         thought=(str, Field(default="", description=descriptions["semantic_match_thought"])),
     )
     text_alignment = create_model(
