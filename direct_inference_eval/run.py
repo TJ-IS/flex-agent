@@ -20,7 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--input",
-        default="data/codebook_done_human.jsonl",
+        default="data/corpus_with_labels.jsonl",
         help=direct_text.input_help,
     )
     parser.add_argument(

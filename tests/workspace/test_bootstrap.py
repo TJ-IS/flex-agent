@@ -26,7 +26,7 @@ class BootstrapSeedFilesTests(unittest.TestCase):
             workspace = Workspace(Path(tmpdir))
             workspace.ensure_layout()
             workspace.human_benchmark_path.write_text('{"marker": true}\n', encoding="utf-8")
-            source = PROJECT_ROOT / "data" / "codebook_done_human.jsonl"
+            source = PROJECT_ROOT / "data" / "corpus_with_labels.jsonl"
             if not source.exists():
                 actions = workspace.bootstrap_seed_files()
                 self.assertEqual(actions[str(workspace.human_benchmark_path)], "kept")

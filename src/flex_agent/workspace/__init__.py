@@ -42,11 +42,11 @@ class Workspace:
 
     @property
     def corpus_seed_path(self) -> Path:
-        return self.corpus_dir / "codebook_done.jsonl"
+        return self.corpus_dir / "corpus.jsonl"
 
     @property
     def human_benchmark_path(self) -> Path:
-        return self.private_dir / "codebook_done_human.jsonl"
+        return self.private_dir / "corpus_with_labels.jsonl"
 
     def ensure_layout(self) -> None:
         for path in (
@@ -67,8 +67,8 @@ class Workspace:
         """Copy packaged seed JSONL files into workspace if missing or stale."""
         self.ensure_layout()
         seeds = {
-            str(self.corpus_seed_path): PROJECT_ROOT / "data" / "codebook_done.jsonl",
-            str(self.human_benchmark_path): PROJECT_ROOT / "data" / "codebook_done_human.jsonl",
+            str(self.corpus_seed_path): PROJECT_ROOT / "data" / "corpus.jsonl",
+            str(self.human_benchmark_path): PROJECT_ROOT / "data" / "corpus_with_labels.jsonl",
         }
         actions: dict[str, str] = {}
         for dest, source in seeds.items():

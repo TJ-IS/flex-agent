@@ -194,11 +194,11 @@ class TextBundle:
     direct: DirectEvalBundle
 
 
-ZH_ORCHESTRATOR_PROMPT = """你是 flex-agent 主编排器，负责自主完成 VR/元宇宙评论的开放式编码（Open Coding）任务。
+ZH_ORCHESTRATOR_PROMPT = """你是主编排器，负责使用扎根理论方法自主完成构念开发任务。
 
-## 工作方式
+## 工作流程
 
-1. 收到用户目标后，先用 `write_todos` 制定计划。
+1. 收到用户目标后，用 `write_todos` 生成工作计划。
 2. 所有编码状态必须持久化到 workspace 文件，不要只在对话里保存结果。
 3. 优先调用专用 Python 工具执行批量步骤；必要时再用 `task` 调度子 Agent 做语义判断。
 4. 每完成一个阶段，用 `workspace_status` 或 `read_file` 核对文件状态。
@@ -208,8 +208,8 @@ ZH_ORCHESTRATOR_PROMPT = """你是 flex-agent 主编排器，负责自主完成 
 
 ## Workspace 布局
 
-- `corpus/codebook_done.jsonl`：原始输入语料（初始化时作为 data_path，不含人工 GT 标签）
-- `private/codebook_done_human.jsonl`：人工评测 benchmark（仅主编排器可访问；编码时禁止读取）
+- `corpus/corpus.jsonl`：原始输入语料（初始化时作为 data_path，不含人工 GT 标签）
+- `private/corpus_with_labels.jsonl`：人工评测 benchmark（仅主编排器可访问；编码时禁止读取）
 - `corpus/raw.jsonl`：`init_open_coding_run` 采样后的工作副本，不要把它当作初始化数据源
 - `corpus/queue.json`：待编码 id
 - `corpus/partition.json`：seed/update pool 划分
@@ -225,7 +225,7 @@ ZH_ORCHESTRATOR_PROMPT = """你是 flex-agent 主编排器，负责自主完成 
 
 ## 标准 SOP
 
-1. `init_open_coding_run`：从原始 jsonl（如 `/corpus/codebook_done.jsonl`）加载、采样、初始化 corpus 与 partition
+1. `init_open_coding_run`：从原始 jsonl（如 `/corpus/corpus.jsonl`）加载、采样、初始化 corpus 与 partition
 2. `batch_open_coding`：并发编码全部文本，写入 `coding/`
 3. `run_construct_induction`：基于 seed pool 生成初始 dimensions
 4. `run_axial_coding`：按 update pool 批次更新代码本
@@ -241,20 +241,20 @@ ZH_ORCHESTRATOR_PROMPT = """你是 flex-agent 主编排器，负责自主完成 
 4. `batch_open_coding` 默认并发由环境变量 `FLEX_AGENT_OPEN_CODING_CONCURRENCY` 控制（默认 40）；全量任务保持该默认值，除非 API 限速。
 5. `init_open_coding_run` 的 seed pool（`codebook_nums`）与 update batch（`kevin_batch_size`）分别由 `FLEX_AGENT_SEED_POOL_SIZE`（默认 20）和 `FLEX_AGENT_UPDATE_BATCH_SIZE`（默认 20）控制；未指定时沿用环境变量默认值。
 
-## 子 Agent
+## Subagents
 
-- `open-coding`：单条文本开放式编码专家
-- `construct-induction`：初始代码本归纳专家
-- `axial-coding`：保守增量更新代码本专家
+- `open-coding`：单条文本开放式编码
+- `construct-induction`：初始代码本归纳
+- `axial-coding`：保守增量更新代码本
 
 当用户要求检查、解释或微调某个文件内容时，可结合 `read_file`/`grep` 与子 Agent 协作。
 请用中文与用户沟通，保持简洁、可审计。
 """
 
 
-EN_ORCHESTRATOR_PROMPT = """You are the flex-agent orchestrator. Your job is to complete open coding for VR/metaverse review data in a persistent workspace.
+EN_ORCHESTRATOR_PROMPT = """You are the orchestrator. Your job is to use grounded theory methods to complete the construct development task in a persistent workspace.
 
-## Operating Model
+## Operating Process
 
 1. When you receive a user goal, first call `write_todos` to make a plan.
 2. All coding state must be persisted to workspace files; do not keep results only in the conversation.
@@ -266,8 +266,8 @@ EN_ORCHESTRATOR_PROMPT = """You are the flex-agent orchestrator. Your job is to 
 
 ## Workspace Layout
 
-- `corpus/codebook_done.jsonl`: source input corpus, used as initialization `data_path`, without human GT labels
-- `private/codebook_done_human.jsonl`: human evaluation benchmark, visible only to the orchestrator; do not read it during coding
+- `corpus/corpus.jsonl`: source input corpus, used as initialization `data_path`, without human GT labels
+- `private/corpus_with_labels.jsonl`: human evaluation benchmark, visible only to the orchestrator; do not read it during coding
 - `corpus/raw.jsonl`: sampled working copy from `init_open_coding_run`; do not treat it as the original data source
 - `corpus/queue.json`: text ids still waiting for coding
 - `corpus/partition.json`: seed/update pool split
@@ -283,7 +283,7 @@ During coding, do not read `private/` or `eval/`, and do not pass their content 
 
 ## Standard SOP
 
-1. `init_open_coding_run`: load and sample from the original jsonl, such as `/corpus/codebook_done.jsonl`, and initialize corpus and partition files
+1. `init_open_coding_run`: load and sample from the original jsonl, such as `/corpus/corpus.jsonl`, and initialize corpus and partition files
 2. `batch_open_coding`: code every queued text concurrently and write `coding/`
 3. `run_construct_induction`: create initial dimensions from the seed pool
 4. `run_axial_coding`: update the codebook from update-pool batches
@@ -299,11 +299,11 @@ If initialization fails or corpus state is inconsistent, call `init_open_coding_
 4. `batch_open_coding` concurrency defaults to `FLEX_AGENT_OPEN_CODING_CONCURRENCY` (default 40); keep that default for full-corpus runs unless the API rate-limits you.
 5. For `init_open_coding_run`, seed pool (`codebook_nums`) and update batch size (`kevin_batch_size`) default to `FLEX_AGENT_SEED_POOL_SIZE` (20) and `FLEX_AGENT_UPDATE_BATCH_SIZE` (20) when omitted.
 
-## Subagents
+## Sub-agents
 
-- `open-coding`: single-text open coding specialist
-- `construct-induction`: initial codebook synthesis specialist
-- `axial-coding`: conservative incremental codebook updater
+- `open-coding`: single-text open coding
+- `construct-induction`: initial codebook synthesis
+- `axial-coding`: conservative incremental codebook update
 
 When the user asks to inspect, explain, or lightly adjust file contents, combine `read_file`/`grep` with subagent collaboration.
 Communicate with the user in English, and keep responses concise and auditable.
@@ -356,7 +356,7 @@ ZH_BUNDLE = TextBundle(
             "dimension_alignment_mapping": "从 agent 维度到 human 维度的映射；无匹配则为 null。",
         },
         tool_arg_descriptions={
-            "data_path": "源 jsonl 路径，每行包含 comments/content 字段，例如 /corpus/codebook_done.jsonl。不要传 corpus/raw.jsonl。",
+            "data_path": "源 jsonl 路径，每行包含 comments/content 字段，例如 /corpus/corpus.jsonl。不要传 corpus/raw.jsonl。",
             "max_nums": "要处理的最大文本数；0 表示使用 data_path 中的全部有效文本（默认）。",
             "codebook_nums": "用于 Inducing 初始代码本 seed pool 的文本数（默认读取 FLEX_AGENT_SEED_POOL_SIZE，缺省 20）。",
             "kevin_batch_size": "AxialCoding update-pool 批次大小（默认读取 FLEX_AGENT_UPDATE_BATCH_SIZE，缺省 20）。",
@@ -592,7 +592,7 @@ EN_BUNDLE = TextBundle(
             "dimension_alignment_mapping": "Mapping from agent dimension to human dimension, or null if there is no match.",
         },
         tool_arg_descriptions={
-            "data_path": "Path to a source jsonl with a comments/content field per line, such as /corpus/codebook_done.jsonl. Do not pass corpus/raw.jsonl.",
+            "data_path": "Path to a source jsonl with a comments/content field per line, such as /corpus/corpus.jsonl. Do not pass corpus/raw.jsonl.",
             "max_nums": "Maximum number of texts to process. 0 means use all valid rows in data_path (default).",
             "codebook_nums": "Number of texts for the Inducing seed pool (default from FLEX_AGENT_SEED_POOL_SIZE, 20 if unset).",
             "kevin_batch_size": "AxialCoding update-pool batch size (default from FLEX_AGENT_UPDATE_BATCH_SIZE, 20 if unset).",

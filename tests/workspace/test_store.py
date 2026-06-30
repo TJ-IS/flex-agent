@@ -130,7 +130,7 @@ class WorkspaceTests(unittest.TestCase):
                     items=[],
                 )
             )
-            extra_corpus = ws.corpus_dir / "codebook_done.jsonl"
+            extra_corpus = ws.corpus_dir / "corpus.jsonl"
             extra_corpus.write_text(
                 json.dumps({"comments": "kept"}, ensure_ascii=False) + "\n",
                 encoding="utf-8",
@@ -156,15 +156,15 @@ class WorkspaceTests(unittest.TestCase):
             root = Path(tmp)
             ws = Workspace(root / "workspace")
             ws.ensure_layout()
-            corpus_file = ws.corpus_dir / "codebook_done.jsonl"
+            corpus_file = ws.corpus_dir / "corpus.jsonl"
             corpus_file.write_text(
                 json.dumps({"comments": "sample"}, ensure_ascii=False) + "\n",
                 encoding="utf-8",
             )
-            resolved = ws.resolve_data_path("/corpus/codebook_done.jsonl")
+            resolved = ws.resolve_data_path("/corpus/corpus.jsonl")
             self.assertEqual(resolved, corpus_file.resolve())
             meta = ws.init_run(
-                data_path="/corpus/codebook_done.jsonl",
+                data_path="/corpus/corpus.jsonl",
                 max_nums=1,
                 codebook_nums=1,
                 kevin_batch_size=1,

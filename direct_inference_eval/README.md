@@ -6,7 +6,7 @@
 
 ```bash
 uv run python direct_inference_eval/run.py \
-  --input data/codebook_done_human.jsonl \
+  --input data/corpus_with_labels.jsonl \
   --output direct_inference_eval/runs/default \
   --batch-size 50 \
   --mode both \

@@ -49,7 +49,7 @@ class InitRunInput(BaseModel):
     data_path: str = Field(
         description=(
             "Path to source jsonl with a comments/content field per line "
-            "(e.g. /corpus/codebook_done.jsonl). Do not pass corpus/raw.jsonl."
+            "(e.g. /corpus/corpus.jsonl). Do not pass corpus/raw.jsonl."
         ),
     )
     max_nums: int = Field(
