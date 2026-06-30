@@ -4,12 +4,12 @@ import asyncio
 import json
 from typing import Any, Awaitable, Callable
 
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, convert_to_messages
 from langgraph.errors import GraphRecursionError
 
 from flex_agent.config import load_recursion_limit
 from flex_agent.i18n import get_bundle
-from flex_agent.ui.events import StepStatus, TimelineEntry, UIUpdate
+from flex_agent.ui.events import StepStatus, StreamEventParser, TimelineEntry, UIUpdate
 from flex_agent.ui.helpers import handle_slash_command
 
 from web.backend.events_serializer import (
@@ -24,6 +24,41 @@ from web.backend.events_serializer import (
 from web.backend.session_manager import AgentRuntime, agent_turn_lock, session_manager
 
 SendFn = Callable[[dict[str, Any]], Awaitable[None]]
+
+
+async def replay_history(runtime: AgentRuntime, send: SendFn) -> None:
+    state = await runtime.agent.aget_state(runtime.config)
+    if not state or not state.values:
+        return
+
+    messages = convert_to_messages(state.values.get("messages") or [])
+    if not messages:
+        return
+
+    runtime.parser = StreamEventParser()
+    chunk: dict[str, Any] = {
+        "messages": messages,
+        "todos": state.values.get("todos") or [],
+    }
+    update = runtime.parser.consume(chunk)
+    flush = runtime.parser.flush_assistant_text()
+    if flush.timeline:
+        update.timeline.extend(flush.timeline)
+    update.steps = dict(runtime.parser.steps)
+    update.todos = list(runtime.parser.todos)
+    update.streaming_assistant = ""
+    update.activity_mode = "idle"
+
+    if not update.timeline and not update.steps and not update.todos:
+        return
+
+    await send(
+        serialize_ui_update(
+            update,
+            workspace=runtime.workspace,
+            language=runtime.language,
+        )
+    )
 
 
 async def send_banner(runtime: AgentRuntime, send: SendFn) -> None:
@@ -277,6 +312,7 @@ async def ws_message_loop(
         await websocket.send_text(json.dumps(payload, ensure_ascii=False))
 
     await send_banner(runtime, send)
+    await replay_history(runtime, send)
 
     while True:
         raw = await websocket.receive_text()

@@ -24,6 +24,7 @@ web = [
     "uvicorn[standard]>=0.32.0",
     "python-multipart>=0.0.12",
     "websockets>=13.0",
+    "langgraph-checkpoint-sqlite>=2.1.0",
 ]
 
 [build-system]

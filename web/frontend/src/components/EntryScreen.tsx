@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import {
   Box,
   Button,
@@ -10,6 +10,7 @@ import {
   FormControlLabel,
   FormLabel,
   Grid,
+  IconButton,
   List,
   ListItemButton,
   ListItemText,
@@ -19,8 +20,10 @@ import {
   Select,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { createSession, getSession, languageForPromptSet } from "../api";
 import { terminalColors } from "../theme";
 import type { EnvMode, PromptSet, SessionDetail, SessionSummary } from "../types";
@@ -61,7 +64,6 @@ export function EntryScreen({
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [model, setModel] = useState("");
-  const [modelPro, setModelPro] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createLoading, setCreateLoading] = useState(false);
@@ -88,6 +90,15 @@ export function EntryScreen({
     }
   };
 
+  const handleCopySessionId = async (sessionId: string, event: MouseEvent) => {
+    event.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(sessionId);
+    } catch {
+      // ignore clipboard errors
+    }
+  };
+
   const handleCreate = async () => {
     setCreateLoading(true);
     setCreateError(null);
@@ -102,7 +113,7 @@ export function EntryScreen({
                 OPENAI_API_KEY: apiKey.trim(),
                 OPENAI_BASE_URL: baseUrl.trim(),
                 OPENAI_MODEL: model.trim(),
-                OPENAI_MODEL_PRO: modelPro.trim(),
+                OPENAI_MODEL_PRO: model.trim(),
               }
             : {},
       });
@@ -162,6 +173,15 @@ export function EntryScreen({
                       primaryTypographyProps={{ fontSize: "0.82rem", fontWeight: 600 }}
                       secondaryTypographyProps={{ fontSize: "0.72rem", color: terminalColors.gray }}
                     />
+                    <Tooltip title="复制 session_id">
+                      <IconButton
+                        size="small"
+                        onClick={(event) => void handleCopySessionId(session.id, event)}
+                        sx={{ mr: 0.5 }}
+                      >
+                        <ContentCopyIcon sx={{ fontSize: "0.9rem" }} />
+                      </IconButton>
+                    </Tooltip>
                     <Stack direction="row" spacing={0.5}>
                       <Chip label={session.env_mode} size="small" sx={{ height: 20, fontSize: "0.65rem" }} />
                       <Chip label={session.prompt_set} size="small" sx={{ height: 20, fontSize: "0.65rem" }} />
@@ -271,24 +291,14 @@ export function EntryScreen({
                       onChange={(event) => setBaseUrl(event.target.value)}
                     />
                   </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="OPENAI_MODEL"
-                      placeholder="deepseek-v4-flash"
-                      value={model}
-                      onChange={(event) => setModel(event.target.value)}
-                    />
-                  </Grid>
                   <Grid item xs={12}>
                     <TextField
                       fullWidth
                       size="small"
-                      label="OPENAI_MODEL_PRO"
+                      label="OPENAI_MODEL（普通+PRO 共用）"
                       placeholder="deepseek-v4-flash"
-                      value={modelPro}
-                      onChange={(event) => setModelPro(event.target.value)}
+                      value={model}
+                      onChange={(event) => setModel(event.target.value)}
                     />
                   </Grid>
                 </Grid>

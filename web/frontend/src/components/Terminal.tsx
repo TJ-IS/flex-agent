@@ -49,75 +49,87 @@ export function Terminal({ sessionId, envMode, promptSet, onExit }: TerminalProp
   const [busy, setBusy] = useState(false);
   const [frameIndex, setFrameIndex] = useState(0);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const lastWorkspaceSummaryRef = useRef<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const stepLineIdsRef = useRef<Record<string, string>>({});
 
-  const appendLine = useCallback((line: TerminalLine) => {
-    setLines((prev) => [...prev, line]);
-  }, []);
+  const applyUpdate = useCallback((event: UpdateEvent) => {
+    if (Object.keys(event.steps).length) {
+      setSteps((prev) => ({ ...prev, ...event.steps }));
+    }
 
-  const applyUpdate = useCallback(
-    (event: UpdateEvent) => {
-      if (Object.keys(event.steps).length) {
-        setSteps((prev) => ({ ...prev, ...event.steps }));
-      }
+    if (event.timeline.length > 0) {
+      setLines((prev) => {
+        let next = prev;
+        const toAppend: TerminalLine[] = [];
 
-      for (const entry of event.timeline) {
-        if (entry.kind === "step" && entry.step_id) {
-          const step = event.steps[entry.step_id];
-          if (step) {
-            const existingLineId = stepLineIdsRef.current[step.step_id];
-            if (existingLineId) {
-              setLines((prev) =>
-                prev.map((line) =>
+        for (const entry of event.timeline) {
+          if (entry.kind === "step" && entry.step_id) {
+            const step = event.steps[entry.step_id];
+            if (step) {
+              const existingLineId = stepLineIdsRef.current[step.step_id];
+              if (existingLineId) {
+                next = next.map((line) =>
                   line.id === existingLineId ? { ...line, step } : line,
-                ),
-              );
-            } else {
-              const lineId = nextLineId("step");
-              stepLineIdsRef.current[step.step_id] = lineId;
-              appendLine({ id: lineId, kind: "step", step });
+                );
+              } else {
+                const lineId = nextLineId("step");
+                stepLineIdsRef.current[step.step_id] = lineId;
+                toAppend.push({ id: lineId, kind: "step", step });
+              }
+              continue;
             }
-            continue;
           }
+
+          if (entry.kind === "user") {
+            const last = toAppend.length > 0 ? toAppend[toAppend.length - 1] : next[next.length - 1];
+            if (last?.kind === "user" && last.text === entry.text) {
+              continue;
+            }
+          }
+
+          toAppend.push({
+            id: nextLineId(entry.kind),
+            kind: entry.kind,
+            text: entry.text,
+          });
         }
-        appendLine({
-          id: nextLineId(entry.kind),
-          kind: entry.kind,
-          text: entry.text,
-        });
-      }
 
-      if (event.todos.length) {
-        setTodos(event.todos);
-        setTodosLineId((prev) => prev ?? nextLineId("todos"));
-      }
+        return toAppend.length > 0 ? [...next, ...toAppend] : next;
+      });
+    }
 
-      if (event.streaming_assistant !== null && event.streaming_assistant !== undefined) {
-        setStreamingText(event.streaming_assistant);
-      }
+    if (event.todos.length) {
+      setTodos(event.todos);
+      setTodosLineId((prev) => prev ?? nextLineId("todos"));
+    }
 
-      if (event.activity_mode) {
-        setActivityMode(event.activity_mode);
-        setBusy(event.activity_mode !== "idle");
-      } else if (event.activity_mode === null) {
-        // keep current
-      }
+    if (event.streaming_assistant !== null && event.streaming_assistant !== undefined) {
+      setStreamingText(event.streaming_assistant);
+    }
 
-      if (event.workspace_summary) {
-        const prefix = event.workspace_prefix ?? "workspace";
-        const summary = `${prefix} · ${event.workspace_summary}`;
-        if (summary !== lastWorkspaceSummaryRef.current) {
-          lastWorkspaceSummaryRef.current = summary;
-          appendLine({ id: nextLineId("system"), kind: "system", text: summary });
-        }
+    if (event.activity_mode) {
+      setActivityMode(event.activity_mode);
+      setBusy(event.activity_mode !== "idle");
+    } else if (event.activity_mode === null) {
+      // keep current
+    }
+
+    if (event.workspace_summary) {
+      const prefix = event.workspace_prefix ?? "workspace";
+      const summary = `${prefix} · ${event.workspace_summary}`;
+      if (summary !== lastWorkspaceSummaryRef.current) {
+        lastWorkspaceSummaryRef.current = summary;
+        setLines((prev) => [
+          ...prev,
+          { id: nextLineId("system"), kind: "system", text: summary },
+        ]);
       }
-    },
-    [appendLine],
-  );
+    }
+  }, []);
 
   const handleServerEvent = useCallback(
     (event: ServerEvent) => {
@@ -232,9 +244,26 @@ export function Terminal({ sessionId, envMode, promptSet, onExit }: TerminalProp
       window.setTimeout(onExit, 300);
       return;
     }
+    setLines((prev) => {
+      const last = prev[prev.length - 1];
+      if (last?.kind === "user" && last.text === text) {
+        return prev;
+      }
+      return [...prev, { id: nextLineId("user"), kind: "user", text }];
+    });
     setBusy(true);
     sendMessage(wsRef.current, text);
     setInput("");
+  };
+
+  const handleCopySessionId = async () => {
+    try {
+      await navigator.clipboard.writeText(sessionId);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // ignore clipboard errors
+    }
   };
 
   const activityLabels = i18n?.activity_labels ?? {
@@ -262,9 +291,19 @@ export function Terminal({ sessionId, envMode, promptSet, onExit }: TerminalProp
         }}
       >
         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-          <Typography variant="caption" sx={{ color: terminalColors.gray }}>
-            {sessionId}
-          </Typography>
+          <Chip
+            size="small"
+            label={copied ? "已复制" : sessionId}
+            onClick={() => void handleCopySessionId()}
+            sx={{
+              height: 24,
+              fontSize: "0.72rem",
+              fontFamily: "monospace",
+              cursor: "pointer",
+              maxWidth: 320,
+              "& .MuiChip-label": { overflow: "hidden", textOverflow: "ellipsis" },
+            }}
+          />
           <Chip size="small" label={envMode} sx={{ height: 20, fontSize: "0.7rem" }} />
           <Chip size="small" label={promptSet} sx={{ height: 20, fontSize: "0.7rem" }} />
           <Button size="small" variant="outlined" onClick={() => setEditorOpen(true)}>

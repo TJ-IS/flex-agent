@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from flex_agent.config import PROJECT_ROOT, load_env_file, warn_langsmith_tracing
 
+from web.backend.checkpointer import close_checkpointer, init_checkpointer
 from web.backend.env_runtime import VALID_PROMPT_SETS
 from web.backend.file_validation import validate_jsonl
 from web.backend.session_manager import session_manager
@@ -50,6 +51,14 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.on_event("startup")
+    async def _startup_checkpointer() -> None:
+        await init_checkpointer()
+
+    @app.on_event("shutdown")
+    async def _shutdown_checkpointer() -> None:
+        await close_checkpointer()
 
     @app.get("/api/health")
     def health() -> dict[str, str]:

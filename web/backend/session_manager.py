@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import random
 import shutil
 import threading
@@ -73,6 +74,48 @@ def _copy_prompt_set(workspace: Workspace, prompt_set: str) -> Path:
     shutil.copytree(source, dest)
     (dest / ".prompt_set").write_text(prompt_set, encoding="utf-8")
     return dest
+
+
+def _web_agent_json_path(workspace: Workspace) -> Path:
+    return workspace.meta_dir / "web_agent.json"
+
+
+def _migrate_legacy_thread_run_json(workspace: Workspace) -> None:
+    """Move mistaken thread_id-only meta/run.json to meta/web_agent.json."""
+    legacy = workspace.meta_dir / "run.json"
+    if not legacy.exists():
+        return
+    try:
+        data = json.loads(legacy.read_text(encoding="utf-8"))
+        if not (isinstance(data, dict) and data.get("thread_id") and "data_path" not in data):
+            return
+        thread_id = str(data["thread_id"])
+        if not _web_agent_json_path(workspace).exists():
+            _save_thread_id(workspace, thread_id)
+        legacy.unlink()
+    except (json.JSONDecodeError, OSError, TypeError):
+        return
+
+
+def _load_thread_id(workspace: Workspace) -> str | None:
+    _migrate_legacy_thread_run_json(workspace)
+    path = _web_agent_json_path(workspace)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        thread_id = data.get("thread_id")
+        return str(thread_id) if thread_id else None
+    except (json.JSONDecodeError, OSError, TypeError):
+        return None
+
+
+def _save_thread_id(workspace: Workspace, thread_id: str) -> None:
+    workspace.ensure_layout()
+    _web_agent_json_path(workspace).write_text(
+        json.dumps({"thread_id": thread_id}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
 
 @dataclass
@@ -170,7 +213,9 @@ class SessionManager:
         root = resolve_workspace_dir(session_id)
         if not root.exists():
             raise FileNotFoundError(f"Session not found: {session_id}")
-        return Workspace(root)
+        workspace = Workspace(root)
+        _migrate_legacy_thread_run_json(workspace)
+        return workspace
 
     def create_session(
         self,
@@ -351,7 +396,10 @@ class SessionManager:
             finally:
                 restore_env(snapshot)
 
-        thread_id = f"flex_agent_{strftime('%Y%m%d_%H%M%S')}"
+        thread_id = _load_thread_id(workspace)
+        if not thread_id:
+            thread_id = f"flex_agent_{strftime('%Y%m%d_%H%M%S')}"
+            _save_thread_id(workspace, thread_id)
         config = merge_invoke_config(
             {
                 "configurable": {"thread_id": thread_id},
