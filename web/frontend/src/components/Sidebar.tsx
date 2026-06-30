@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useState } from "react";
 import {
   Box,
   Button,
@@ -12,7 +12,7 @@ import {
 } from "@mui/material";
 import { terminalColors } from "../theme";
 import type { SessionSummary } from "../types";
-import { downloadFileUrl, uploadFile } from "../api";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 export interface SidebarContentProps {
   sessions: SessionSummary[];
@@ -28,25 +28,10 @@ export function SidebarContent({
   activeSessionId,
   onSelect,
   onDelete,
-  onRefresh,
+  onRefresh: _onRefresh,
   onHome,
 }: SidebarContentProps) {
-  const corpusInputRef = useRef<HTMLInputElement>(null);
-  const labelsInputRef = useRef<HTMLInputElement>(null);
-
-  const handleUpload = async (
-    kind: "corpus.jsonl" | "corpus_with_labels.jsonl",
-    file: File | undefined,
-  ) => {
-    if (!activeSessionId || !file) return;
-    try {
-      await uploadFile(activeSessionId, kind, file);
-      onRefresh();
-      alert("上传成功");
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "上传失败");
-    }
-  };
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   return (
     <>
@@ -132,77 +117,29 @@ export function SidebarContent({
             <Stack spacing={0.75}>
               <Button
                 size="small"
-                variant="outlined"
-                fullWidth
-                href={downloadFileUrl(activeSessionId, "corpus.jsonl")}
-                download
-                sx={{ borderColor: terminalColors.border }}
-              >
-                下载 corpus 模板
-              </Button>
-              <Button
-                size="small"
-                variant="outlined"
-                fullWidth
-                href={downloadFileUrl(activeSessionId, "corpus_with_labels.jsonl")}
-                download
-                sx={{ borderColor: terminalColors.border }}
-              >
-                下载 labels 模板
-              </Button>
-              <Button
-                size="small"
-                variant="text"
-                fullWidth
-                onClick={() => corpusInputRef.current?.click()}
-              >
-                上传 corpus
-              </Button>
-              <Button
-                size="small"
-                variant="text"
-                fullWidth
-                onClick={() => labelsInputRef.current?.click()}
-              >
-                上传 labels
-              </Button>
-              <Button
-                size="small"
                 color="error"
                 variant="text"
                 fullWidth
-                onClick={() => {
-                  if (confirm(`删除 session ${activeSessionId}?`)) {
-                    onDelete(activeSessionId);
-                  }
-                }}
+                onClick={() => setConfirmDeleteId(activeSessionId)}
               >
                 删除 session
               </Button>
             </Stack>
-            <input
-              ref={corpusInputRef}
-              type="file"
-              accept=".jsonl,application/json"
-              hidden
-              onChange={(event) => {
-                void handleUpload("corpus.jsonl", event.target.files?.[0]);
-                event.target.value = "";
-              }}
-            />
-            <input
-              ref={labelsInputRef}
-              type="file"
-              accept=".jsonl,application/json"
-              hidden
-              onChange={(event) => {
-                void handleUpload("corpus_with_labels.jsonl", event.target.files?.[0]);
-                event.target.value = "";
-              }}
-            />
           </Box>
         </>
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteId !== null}
+        title="删除 session"
+        message={`确认删除 session ${confirmDeleteId ?? ""}？此操作不可撤销。`}
+        confirmLabel="删除"
+        confirmColor="error"
+        onConfirm={() => {
+          if (confirmDeleteId) onDelete(confirmDeleteId);
+        }}
+        onClose={() => setConfirmDeleteId(null)}
+      />
     </>
   );
 }

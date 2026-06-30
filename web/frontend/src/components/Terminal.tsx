@@ -25,7 +25,7 @@ import type {
 } from "../types";
 import { InputBar } from "./InputBar";
 import { StreamingLine } from "./StreamingLine";
-import { TaskBackgroundEditor } from "./TaskBackgroundEditor";
+import { WorkspaceEditor } from "./WorkspaceEditor";
 import { Timeline } from "./Timeline";
 import { Todos } from "./Todos";
 
@@ -88,6 +88,10 @@ export function Terminal({
                 next = next.map((line) =>
                   line.id === existingLineId ? { ...line, step } : line,
                 );
+                const pendingIdx = toAppend.findIndex((line) => line.id === existingLineId);
+                if (pendingIdx >= 0) {
+                  toAppend[pendingIdx] = { ...toAppend[pendingIdx], step };
+                }
               } else {
                 const lineId = nextLineId("step");
                 stepLineIdsRef.current[step.step_id] = lineId;
@@ -383,7 +387,7 @@ export function Terminal({
             onClick={() => setEditorOpen(true)}
             sx={toolbarButtonSx}
           >
-            编辑 task_background
+            编辑
           </Button>
         </Stack>
       </Box>
@@ -444,7 +448,7 @@ export function Terminal({
         busy={busy}
         onInterrupt={handleInterrupt}
       />
-      <TaskBackgroundEditor
+      <WorkspaceEditor
         sessionId={sessionId}
         open={editorOpen}
         onClose={() => setEditorOpen(false)}

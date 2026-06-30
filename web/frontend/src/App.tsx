@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Box, Drawer, useMediaQuery, useTheme } from "@mui/material";
+import { Box, Drawer, Snackbar, Alert, useMediaQuery, useTheme } from "@mui/material";
 import { deleteSession, getSession } from "./api";
 import { EntryScreen } from "./components/EntryScreen";
 import { Sidebar, SidebarContent } from "./components/Sidebar";
@@ -20,6 +20,7 @@ export default function App() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [errorToast, setErrorToast] = useState<string | null>(null);
 
   const refreshSessions = useCallback(async () => {
     const localRecords = listLocalSessions();
@@ -99,7 +100,7 @@ export default function App() {
       }
       await refreshSessions();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "删除 session 失败");
+      setErrorToast(err instanceof Error ? err.message : "删除 session 失败");
     }
   };
 
@@ -171,6 +172,22 @@ export default function App() {
           />
         )}
       </Box>
+
+      <Snackbar
+        open={errorToast !== null}
+        autoHideDuration={5000}
+        onClose={() => setErrorToast(null)}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+      >
+        <Alert
+          severity="error"
+          variant="filled"
+          onClose={() => setErrorToast(null)}
+          sx={{ width: "100%" }}
+        >
+          {errorToast}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

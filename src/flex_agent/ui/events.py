@@ -218,6 +218,9 @@ class StreamEventParser:
 
     def _consume_message(self, message: BaseMessage, update: UIUpdate) -> None:
         if isinstance(message, HumanMessage):
+            flushed = self.flush_assistant_text()
+            if flushed.timeline:
+                update.timeline.extend(flushed.timeline)
             text = _extract_text_content(message.content)
             if text and text not in self.emitted_user_texts:
                 self.emitted_user_texts.add(text)

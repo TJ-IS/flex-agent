@@ -11,7 +11,6 @@ from datetime import datetime
 from pathlib import Path
 from time import strftime
 from typing import Any
-
 from flex_agent.config import (
     PROMPTS_ROOT,
     WORKSPACES_ROOT,
@@ -48,6 +47,21 @@ from web.backend.events_serializer import (
 )
 
 SendFn = Callable[[dict[str, Any]], Awaitable[None]]
+
+_WEB_DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
+
+
+def _apply_web_corpus_subset(workspace: Workspace) -> None:
+    """Overwrite bootstrapped corpus files with the 100-item web subset."""
+    for dest_name, src_name in (
+        ("corpus.jsonl", "corpus.jsonl"),
+        ("corpus_with_labels.jsonl", "corpus_with_labels.jsonl"),
+    ):
+        src = _WEB_DATA_ROOT / src_name
+        if not src.exists():
+            continue
+        dest = workspace.corpus_seed_path if dest_name == "corpus.jsonl" else workspace.human_benchmark_path
+        shutil.copy2(src, dest)
 
 
 agent_turn_lock = asyncio.Lock()
@@ -283,6 +297,7 @@ class SessionManager:
         workspace = Workspace(workspace_dir)
         workspace.ensure_layout()
         workspace.bootstrap_seed_files()
+        _apply_web_corpus_subset(workspace)
         prompts_dir = _copy_prompt_set(workspace, prompt_set)
 
         env_json = {"mode": mode, "overrides": cleaned_overrides if mode == "byok" else {}}

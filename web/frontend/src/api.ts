@@ -39,15 +39,27 @@ export async function deleteSession(sessionId: string): Promise<void> {
   );
 }
 
-export async function getTaskBackground(sessionId: string): Promise<string> {
+export type WorkspaceTextPath =
+  | "prompts/task_background.md"
+  | "files/corpus.jsonl"
+  | "files/corpus_with_labels.jsonl";
+
+export async function getTextFile(
+  sessionId: string,
+  path: WorkspaceTextPath,
+): Promise<string> {
   const response = await fetch(
-    `/api/sessions/${encodeURIComponent(sessionId)}/prompts/task_background.md`,
+    `/api/sessions/${encodeURIComponent(sessionId)}/${path}`,
   );
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(detail || `Request failed: ${response.status}`);
   }
   return response.text();
+}
+
+export async function getTaskBackground(sessionId: string): Promise<string> {
+  return getTextFile(sessionId, "prompts/task_background.md");
 }
 
 export async function saveTaskBackground(

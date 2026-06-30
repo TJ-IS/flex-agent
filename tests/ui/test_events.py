@@ -112,6 +112,45 @@ class StreamEventParserTests(unittest.TestCase):
         self.assertEqual(second.streaming_assistant, "hello world")
         self.assertEqual(len(second.timeline), 0)
 
+    def test_replay_multi_turn_preserves_user_assistant_order(self) -> None:
+        parser = StreamEventParser()
+        update = parser.consume(
+            {
+                "messages": [
+                    HumanMessage(content="first"),
+                    AIMessage(
+                        content="",
+                        tool_calls=[
+                            {
+                                "name": "batch_open_coding",
+                                "args": {},
+                                "id": "call-1",
+                            }
+                        ],
+                    ),
+                    ToolMessage(content="ok", tool_call_id="call-1"),
+                    AIMessage(content="answer one"),
+                    HumanMessage(content="second"),
+                    AIMessage(content="answer two"),
+                ]
+            }
+        )
+        flushed = parser.flush_assistant_text()
+        timeline = update.timeline + flushed.timeline
+        kinds_and_text = [(entry.kind, entry.text) for entry in timeline]
+        self.assertEqual(kinds_and_text[0], ("user", "first"))
+        self.assertEqual(kinds_and_text[-2], ("user", "second"))
+        self.assertEqual(kinds_and_text[-1], ("assistant", "answer two"))
+        assistant_texts = [text for kind, text in kinds_and_text if kind == "assistant"]
+        self.assertEqual(assistant_texts, ["answer one", "answer two"])
+        user_indices = [idx for idx, (kind, _text) in enumerate(kinds_and_text) if kind == "user"]
+        assistant_indices = [
+            idx for idx, (kind, _text) in enumerate(kinds_and_text) if kind == "assistant"
+        ]
+        self.assertTrue(user_indices[0] < assistant_indices[0])
+        self.assertTrue(assistant_indices[0] < user_indices[1])
+        self.assertTrue(user_indices[1] < assistant_indices[1])
+
 
 class ToolLabelTests(unittest.TestCase):
     def test_tool_label_mapping(self) -> None:

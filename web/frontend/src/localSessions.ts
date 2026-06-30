@@ -26,7 +26,7 @@ function writeAll(records: LocalSessionRecord[]): void {
 }
 
 export function listLocalSessions(): LocalSessionRecord[] {
-  return readAll().sort((a, b) => b.last_opened.localeCompare(a.last_opened));
+  return readAll().sort((a, b) => b.id.localeCompare(a.id));
 }
 
 export function registerLocalSession(

@@ -150,11 +150,6 @@ export function EntryScreen({
           >
             CODE: COnstruct Development Engine
           </Typography>
-          <Typography sx={{ color: terminalColors.gray, mt: 1 }}>
-            输入 session_id 恢复 workspace
-            <br />
-            或创建新的 workspace
-          </Typography>
         </Box>
 
         {!loading && recentSessions.length > 0 && (
