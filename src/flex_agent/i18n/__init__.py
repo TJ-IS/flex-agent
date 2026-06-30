@@ -415,7 +415,7 @@ ZH_BUNDLE = TextBundle(
         parser_description="flex-agent interactive open coding CLI",
         workspace_help="Workspace category or path (default: baseline -> workspaces/baseline).",
         prompts_dir_help="Prompt set name or path. Defaults to baseline for zh and baseline_en for en.",
-        language_help="Language for prompts, reports, and code-side text (default: zh or FLEX_AGENT_LANGUAGE).",
+        language_help="Language for prompts, reports, and code-side text (default: zh or en).",
         banner_hint="输入 open coding 任务，或 /status /tree /export /eval:open /clear /help · Esc 中断 · exit 退出",
         help_text="\n".join(
             [
@@ -651,7 +651,7 @@ EN_BUNDLE = TextBundle(
         parser_description="flex-agent interactive open coding CLI",
         workspace_help="Workspace category or path (default: baseline -> workspaces/baseline).",
         prompts_dir_help="Prompt set name or path. Defaults to baseline for zh and baseline_en for en.",
-        language_help="Language for prompts, reports, and code-side text (default: zh or FLEX_AGENT_LANGUAGE).",
+        language_help="Language for prompts, reports, and code-side text (default: zh or en).",
         banner_hint="Enter an open coding task, or /status /tree /export /eval:open /clear /help · Esc interrupts · exit quits",
         help_text="\n".join(
             [
