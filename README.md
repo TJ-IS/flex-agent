@@ -2,6 +2,11 @@
 
 CODE is a Agent with construct-development harness.
 
+## Framework
+
+[Framework](./docs/topo_framework.png)
+
+
 ## Quick start
 
 Install `uv`
