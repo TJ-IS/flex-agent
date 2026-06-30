@@ -19,6 +19,7 @@ wheels/
 # Web frontend generated files
 web/.next/
 web/node_modules/
+web/frontend/node_modules/
 web/next-env.d.ts
 
 # Secrets

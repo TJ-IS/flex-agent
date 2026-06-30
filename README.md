@@ -38,3 +38,51 @@ uv run agent
 > uv run agent --prompts-dir exp-v2 --workspace exp-v2
 > uv run agent --debug
 > ```
+
+## Web TUI (browser)
+
+Run the same TUI experience in a browser. No registration required; each session maps to a workspace under `workspaces/<session_id>/`.
+
+### Install web dependencies
+
+```bash
+uv sync --extra web
+cd web/frontend && npm install && npm run build
+```
+
+### Start server
+
+```bash
+uv run agent-web
+# or
+uv run uvicorn web.backend.server:app --host 0.0.0.0 --port 8000
+```
+
+Open `http://localhost:8000`. The entry screen lets you:
+
+- **Open** an existing workspace by `session_id`
+- **Create** a new workspace with:
+  - **env** mode: use the server `.env` (`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `OPENAI_MODEL_PRO`)
+  - **BYOK** mode: supply your own API credentials (stored per workspace in `workspaces/<session_id>/meta/env.json`)
+  - **Prompt set**: `baseline`, `baseline_en`, `baseline_oneshot`, or `baseline_fewshot` (copied into `workspaces/<session_id>/prompts/`)
+
+Inside a workspace you can edit `task_background.md` from the terminal toolbar. Each workspace keeps its own prompt copy and env settings; the CLI (`uv run agent`) is unaffected.
+
+Download `corpus.jsonl` and `corpus_with_labels.jsonl` templates from the sidebar, replace with your data, and upload before running open coding tasks.
+
+### Development
+
+```bash
+# terminal 1: backend
+uv run uvicorn web.backend.server:app --host 127.0.0.1 --port 8000 --reload
+
+# terminal 2: frontend dev server (proxies /api to backend)
+cd web/frontend && npm run dev
+```
+
+### Deployment notes
+
+- Reuse the same `.env` as the CLI (`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, etc.).
+- Put nginx (or similar) in front for HTTPS; optional basic auth for production.
+- **Concurrency:** agent turns and slash commands are serialized globally (one at a time across all sessions) because the existing CLI uses module-level language/workspace globals. File upload, download, and session listing are not serialized.
+- **Memory:** workspace files persist across server restarts; in-process LangGraph conversation memory does not. After restart, the agent can continue from saved coding/codebook state via tools like `workspace_status`.
