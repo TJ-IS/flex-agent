@@ -50,15 +50,13 @@ def handle_slash_command(workspace: Workspace, command: str) -> tuple[bool, str 
         return True, get_bundle().progress.export_result.format(path=path)
     if cmd == "/eval:open":
         cli_text = get_bundle().cli
-        mode = parts[1].lower() if len(parts) > 1 and not parts[1].startswith("--") else "both"
-        if mode not in {"keyword", "semantic", "both", "metrics"}:
+        mode = parts[1].lower() if len(parts) > 1 and not parts[1].startswith("--") else "semantic"
+        if mode not in {"semantic", "metrics"}:
             return True, cli_text.invalid_eval_mode.format(mode=mode)
-        align = "--align" in parts
         try:
             report = evaluate_workspace(
                 workspace,
                 mode=mode,  # type: ignore[arg-type]
-                align=align,
                 on_progress=lambda msg: print(msg, file=sys.stderr, flush=True),
             )
         except RuntimeError as exc:

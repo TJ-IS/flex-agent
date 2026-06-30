@@ -8,11 +8,8 @@ from flex_agent.config import build_llm, load_model_config
 from flex_agent.eval.aggregate import aggregate_eval_results
 from flex_agent.eval.async_utils import run_async
 from flex_agent.eval.batch_semantic import batch_semantic_judge
-from flex_agent.eval.core import ALL_HUMAN_DIMENSIONS, extract_agent_items
-from flex_agent.eval.judge import judge_keyword
 from flex_agent.eval.pairs import load_eval_pairs
 from flex_agent.eval.report import format_open_coding_report
-from flex_agent.eval.semantic import apply_semantic_alignment, build_dimension_name_alignment
 from flex_agent.i18n import get_bundle, get_language
 from flex_agent.workspace import Workspace
 
@@ -27,10 +24,10 @@ def _emit_progress(on_progress: ProgressCallback | None, message: str) -> None:
 def _default_progress(message: str) -> None:
     print(message, file=sys.stderr, flush=True)
 
+
 def aggregate_workspace_eval(
     workspace: Workspace,
     *,
-    mode: Literal["keyword", "semantic", "both"] = "both",
     save_json: bool = True,
     on_progress: ProgressCallback | None = _default_progress,
 ) -> str:
@@ -42,20 +39,13 @@ def aggregate_workspace_eval(
         raise RuntimeError(progress.eval_no_results)
 
     agg = aggregate_eval_results(workspace.eval_open_dir)
-    item_keyword = agg.get("item_level_keyword")
     item_semantic = agg.get("item_level_semantic")
-
-    if mode == "keyword":
-        item_semantic = None
-    elif mode == "semantic":
-        item_keyword = None
 
     summary = workspace.load_eval_summary("open") or {}
     coded_count = summary.get("coded_count", len(workspace.list_coded_ids()))
     benchmark_path = summary.get("benchmark_path", str(workspace.human_benchmark_path))
 
     report = format_open_coding_report(
-        item_keyword=item_keyword,
         item_semantic=item_semantic,
         coded_count=coded_count,
         benchmark_path=benchmark_path,
@@ -64,15 +54,12 @@ def aggregate_workspace_eval(
 
     if save_json:
         payload: dict[str, Any] = {
-            "mode": mode,
-            "align": summary.get("align", False),
+            "mode": "semantic",
             "status": "complete",
             "coded_count": coded_count,
             "benchmark_path": benchmark_path,
             "language": language,
         }
-        if item_keyword is not None:
-            payload["item_level_keyword"] = item_keyword
         if item_semantic is not None:
             payload["item_level_semantic"] = item_semantic
 
@@ -81,13 +68,11 @@ def aggregate_workspace_eval(
             payload=payload,
             report=report,
             meta={
-                "mode": mode,
-                "align": summary.get("align", False),
+                "mode": "semantic",
                 "status": "complete",
                 "coded_count": coded_count,
                 "benchmark_path": benchmark_path,
                 "language": language,
-                "keyword_complete": agg["keyword_complete"],
                 "semantic_complete": agg["semantic_complete"],
             },
         )
@@ -105,21 +90,19 @@ def aggregate_workspace_eval(
 def evaluate_workspace(
     workspace: Workspace,
     *,
-    mode: Literal["keyword", "semantic", "both", "metrics"] = "both",
-    align: bool = False,
+    mode: Literal["semantic", "metrics"] = "semantic",
     concurrency_limit: int = 10,
     resume: bool = True,
     save_json: bool = True,
     on_progress: ProgressCallback | None = _default_progress,
 ) -> str:
-    """Evaluate workspace open coding: align → judge per-text → aggregate CPR."""
+    """Evaluate workspace open coding: judge per-text semantically → aggregate CPR."""
     language = get_language()
     progress = get_bundle(language).progress
     report_text = get_bundle(language).report
     if mode == "metrics":
         return aggregate_workspace_eval(
             workspace,
-            mode="both",
             save_json=save_json,
             on_progress=on_progress,
         )
@@ -131,7 +114,7 @@ def evaluate_workspace(
     if coded_count == 0:
         raise RuntimeError(progress.eval_no_coded_texts)
 
-    _emit_progress(on_progress, progress.eval_start.format(mode=mode, coded_count=coded_count))
+    _emit_progress(on_progress, progress.eval_start.format(mode="semantic", coded_count=coded_count))
 
     benchmark_path = workspace.human_benchmark_path
     _emit_progress(on_progress, progress.eval_load_benchmark.format(path=benchmark_path))
@@ -149,92 +132,44 @@ def evaluate_workspace(
     if not pairs:
         raise RuntimeError(progress.eval_no_pairs)
 
-    agent_items = extract_agent_items([
-        {"id": pair.text_id, "items": pair.agent_items_raw} for pair in pairs
-    ])
-
-    if align:
-        all_agent_dims = sorted({dim for items in agent_items.values() for dim in items})
-        unmatched = [d for d in all_agent_dims if d not in ALL_HUMAN_DIMENSIONS]
-        if unmatched:
-            _emit_progress(
-                on_progress,
-                progress.eval_dimension_mapping.format(count=len(unmatched)),
-            )
-            model_cfg = load_model_config()
-            llm = build_llm(
-                model_cfg.default_model,
-                timeout=120.0,
-                max_retries=model_cfg.max_retries,
-                seed=model_cfg.seed,
-            )
-            alignment = build_dimension_name_alignment(unmatched, ALL_HUMAN_DIMENSIONS, llm)
-            agent_items = apply_semantic_alignment(agent_items, alignment)
-
     workspace.eval_open_dir.mkdir(parents=True, exist_ok=True)
 
-    if mode in {"keyword", "both"}:
-        _emit_progress(on_progress, progress.eval_keyword_running)
-        for pair in pairs:
-            keyword = judge_keyword(pair, agent_items=agent_items.get(pair.text_id))
-            existing = workspace.load_eval_text("open", pair.text_id) or {"text_id": pair.text_id}
-            existing["keyword"] = keyword
-            workspace.save_eval_text("open", pair.text_id, existing)
+    model_cfg = load_model_config()
+    align_llm = build_llm(
+        model_cfg.default_model,
+        timeout=180.0,
+        max_retries=model_cfg.max_retries,
+        seed=model_cfg.seed,
+    )
+    run_async(
+        batch_semantic_judge(
+            workspace,
+            pairs,
+            align_llm,
+            resume=resume,
+            concurrency_limit=concurrency_limit,
+            on_progress=lambda msg: _emit_progress(on_progress, msg),
+        )
+    )
+    agg = aggregate_eval_results(workspace.eval_open_dir)
+    if agg.get("item_level_semantic"):
+        micro = agg["item_level_semantic"]["micro"]
         _emit_progress(
             on_progress,
-            progress.eval_keyword_written.format(count=len(pairs)),
+            progress.eval_semantic_macro.format(
+                consistency=micro["consistency"],
+                precision=micro["precision"],
+                recall=micro["recall"],
+                complete=agg["semantic_complete"],
+                total=len(pairs),
+            ),
         )
-        agg = aggregate_eval_results(workspace.eval_open_dir)
-        if agg.get("item_level_keyword"):
-            micro = agg["item_level_keyword"]["micro"]
-            _emit_progress(
-                on_progress,
-                progress.eval_keyword_macro.format(
-                    consistency=micro["consistency"],
-                    precision=micro["precision"],
-                    recall=micro["recall"],
-                ),
-            )
-
-    if mode in {"semantic", "both"}:
-        model_cfg = load_model_config()
-        align_llm = build_llm(
-            model_cfg.default_model,
-            timeout=180.0,
-            max_retries=model_cfg.max_retries,
-            seed=model_cfg.seed,
-        )
-        run_async(
-            batch_semantic_judge(
-                workspace,
-                pairs,
-                align_llm,
-                resume=resume,
-                concurrency_limit=concurrency_limit,
-                on_progress=lambda msg: _emit_progress(on_progress, msg),
-            )
-        )
-        agg = aggregate_eval_results(workspace.eval_open_dir)
-        if agg.get("item_level_semantic"):
-            micro = agg["item_level_semantic"]["micro"]
-            _emit_progress(
-                on_progress,
-                progress.eval_semantic_macro.format(
-                    consistency=micro["consistency"],
-                    precision=micro["precision"],
-                    recall=micro["recall"],
-                    complete=agg["semantic_complete"],
-                    total=len(pairs),
-                ),
-            )
 
     _emit_progress(on_progress, progress.eval_generating_report)
     agg = aggregate_eval_results(workspace.eval_open_dir)
-    item_keyword = agg.get("item_level_keyword") if mode in {"keyword", "both"} else None
-    item_semantic = agg.get("item_level_semantic") if mode in {"semantic", "both"} else None
+    item_semantic = agg.get("item_level_semantic")
 
     report = format_open_coding_report(
-        item_keyword=item_keyword,
         item_semantic=item_semantic,
         coded_count=coded_count,
         benchmark_path=str(benchmark_path),
@@ -243,15 +178,12 @@ def evaluate_workspace(
 
     if save_json:
         payload: dict[str, Any] = {
-            "mode": mode,
-            "align": align,
+            "mode": "semantic",
             "status": "complete",
             "coded_count": coded_count,
             "benchmark_path": str(benchmark_path),
             "language": language,
         }
-        if item_keyword is not None:
-            payload["item_level_keyword"] = item_keyword
         if item_semantic is not None:
             payload["item_level_semantic"] = item_semantic
 
@@ -260,13 +192,11 @@ def evaluate_workspace(
             payload=payload,
             report=report,
             meta={
-                "mode": mode,
-                "align": align,
+                "mode": "semantic",
                 "status": "complete",
                 "coded_count": coded_count,
                 "benchmark_path": str(benchmark_path),
                 "language": language,
-                "keyword_complete": agg["keyword_complete"],
                 "semantic_complete": agg["semantic_complete"],
             },
         )

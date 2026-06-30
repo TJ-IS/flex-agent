@@ -59,12 +59,11 @@ def _section_complete(section: dict[str, Any] | None) -> bool:
     return status == "complete"
 
 
-def load_eval_text_rows(eval_dir: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Load complete keyword/semantic rows from eval/open/{id}.json files."""
-    keyword_rows: list[dict[str, Any]] = []
+def load_eval_text_rows(eval_dir: Path) -> list[dict[str, Any]]:
+    """Load complete semantic rows from eval/open/{id}.json files."""
     semantic_rows: list[dict[str, Any]] = []
     if not eval_dir.exists():
-        return keyword_rows, semantic_rows
+        return semantic_rows
 
     for path in sorted(eval_dir.glob("*.json"), key=lambda p: p.stem):
         if path.name == "summary.json":
@@ -74,13 +73,10 @@ def load_eval_text_rows(eval_dir: Path) -> tuple[list[dict[str, Any]], list[dict
         except ValueError:
             continue
         payload = json.loads(path.read_text(encoding="utf-8"))
-        keyword = payload.get("keyword")
         semantic = payload.get("semantic")
-        if _section_complete(keyword):
-            keyword_rows.append(keyword)
         if _section_complete(semantic):
             semantic_rows.append(_normalize_semantic_row(semantic))
-    return keyword_rows, semantic_rows
+    return semantic_rows
 
 
 def _normalize_semantic_row(section: dict[str, Any]) -> dict[str, Any]:
@@ -103,11 +99,9 @@ def _normalize_semantic_row(section: dict[str, Any]) -> dict[str, Any]:
 
 
 def aggregate_eval_results(eval_dir: Path) -> dict[str, Any]:
-    """Scan eval/open/*.json and compute aggregated keyword/semantic metrics."""
-    keyword_rows, semantic_rows = load_eval_text_rows(eval_dir)
+    """Scan eval/open/*.json and compute aggregated semantic metrics."""
+    semantic_rows = load_eval_text_rows(eval_dir)
     return {
-        "item_level_keyword": _aggregate_rows(keyword_rows) if keyword_rows else None,
         "item_level_semantic": _aggregate_rows(semantic_rows) if semantic_rows else None,
-        "keyword_complete": len(keyword_rows),
         "semantic_complete": len(semantic_rows),
     }

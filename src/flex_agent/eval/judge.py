@@ -1,17 +1,15 @@
-"""Per-text keyword and semantic judging for open coding evaluation."""
+"""Per-text semantic judging for open coding evaluation."""
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
 
-from flex_agent.eval.core import EvalMetrics, extract_agent_items, normalize_dimension
+from flex_agent.eval.core import normalize_dimension
 from flex_agent.eval.pairs import EvalPair
 from flex_agent.eval.semantic_metrics import (
-    apply_heuristic_semantic_alignment,
     build_semantic_row,
-    merge_semantic_alignments,
     prefetch_semantic_alignment,
 )
 from flex_agent.eval.text_alignment import (
@@ -19,8 +17,6 @@ from flex_agent.eval.text_alignment import (
     _human_items_for_prompt,
     build_semantic_alignment_for_texts,
 )
-
-JudgeStatus = Literal["complete", "failed", "pending"]
 
 
 def _agent_dims_from_raw(agent_items_raw: list[dict[str, Any]]) -> set[str]:
@@ -69,32 +65,18 @@ def _counts_to_row(
     }
 
 
-def judge_keyword(
-    pair: EvalPair,
-    *,
-    agent_items: dict[str, int] | None = None,
-) -> dict[str, Any]:
-    """Judge one text by normalized dimension name matching."""
-    human_dims = _human_dims_from_pair(pair)
-    if agent_items is not None:
-        agent_dims = {normalize_dimension(dim) for dim in agent_items}
-    else:
-        extracted = extract_agent_items([
-            {"id": pair.text_id, "items": pair.agent_items_raw},
-        ])
-        agent_dims = {normalize_dimension(dim) for dim in extracted.get(pair.text_id, {})}
-    matched = human_dims & agent_dims
-    return _counts_to_row(pair.text_id, human_dims, agent_dims, matched, matched)
-
-
 def judge_semantic(pair: EvalPair, llm: BaseChatModel) -> dict[str, Any]:
-    """Judge one text using relaxed alias prefetch + LLM semantic alignment."""
+    """Judge one text using heuristic prefetch + LLM semantic alignment (one-to-many)."""
     human_dims = _human_dims_from_pair(pair)
     agent_dims = _agent_dims_from_raw(pair.agent_items_raw)
-    alignment = prefetch_semantic_alignment(agent_dims, human_dims)
+    heuristic = prefetch_semantic_alignment(agent_dims, human_dims)
 
-    pending_agent = {agent for agent, human in alignment.items() if human is None}
-    if pending_agent:
+    alignment: dict[str, list[str] | None] = {
+        agent: ([human] if human else None) for agent, human in heuristic.items()
+    }
+
+    pending = [agent for agent, humans in alignment.items() if not humans]
+    if pending:
         entry = {
             "text_id": pair.text_id,
             "content": pair.content,
@@ -103,12 +85,13 @@ def judge_semantic(pair: EvalPair, llm: BaseChatModel) -> dict[str, Any]:
         }
         try:
             llm_alignment = build_semantic_alignment_for_texts([entry], llm)
-            alignment = merge_semantic_alignments(
-                alignment,
-                llm_alignment.get(pair.text_id, {}),
-            )
+            override = llm_alignment.get(pair.text_id, {})
+            for agent, humans in override.items():
+                if humans:
+                    alignment[agent] = humans
+                elif agent in alignment:
+                    alignment[agent] = alignment[agent] or None
         except Exception as exc:
-            alignment = apply_heuristic_semantic_alignment(agent_dims, human_dims, alignment)
             if any(alignment.values()):
                 return build_semantic_row(pair.text_id, human_dims, agent_dims, alignment)
             return build_semantic_row(
@@ -120,19 +103,15 @@ def judge_semantic(pair: EvalPair, llm: BaseChatModel) -> dict[str, Any]:
                 error=repr(exc),
             )
 
-    alignment = apply_heuristic_semantic_alignment(agent_dims, human_dims, alignment)
     return build_semantic_row(pair.text_id, human_dims, agent_dims, alignment)
 
 
 def build_eval_text_payload(
     pair: EvalPair,
     *,
-    keyword: dict[str, Any] | None = None,
     semantic: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {"text_id": pair.text_id}
-    if keyword is not None:
-        payload["keyword"] = keyword
     if semantic is not None:
         payload["semantic"] = semantic
     return payload

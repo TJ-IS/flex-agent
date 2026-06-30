@@ -8,6 +8,7 @@ from time import strftime
 from typing import Any
 
 from langchain_core.messages import HumanMessage
+from langgraph.errors import GraphRecursionError
 
 from flex_agent.orchestration import create_flex_agent
 from flex_agent.config import (
@@ -295,6 +296,38 @@ async def run_plain_cli(
             update = parser.mark_interrupted()
             renderer.render_update(update, parser=parser, workspace=workspace)
             print(style(f"\n{cli_text.interrupted}", TermStyle.YELLOW), flush=True)
+            renderer.render_workspace_status(workspace)
+        except GraphRecursionError as exc:
+            import traceback
+            limit = config.get("recursion_limit")
+            update = parser.mark_error(exc)
+            agent_debug_log(
+                hypothesis_id="H2,H3,H4",
+                location="src/flex_agent/ui/plain_cli.py:run_plain_cli:recursion",
+                message="agent turn recursion limit reached",
+                data={
+                    "error_type": type(exc).__name__,
+                    "error": repr(exc),
+                    "recursion_limit": limit,
+                    "traceback": traceback.format_exc(),
+                    "running_steps": [
+                        {"tool_name": step.tool_name, "summary": step.summary}
+                        for step in parser.steps.values()
+                        if step.status == StepStatus.RUNNING
+                    ],
+                },
+            )
+            renderer.render_update(update, parser=parser, workspace=workspace)
+            for step in update.steps.values():
+                if step.status == StepStatus.ERROR:
+                    renderer.render_step(step)
+            print(
+                style(
+                    f"\n{cli_text.recursion_limit_reached.format(limit=limit)}",
+                    TermStyle.YELLOW,
+                ),
+                flush=True,
+            )
             renderer.render_workspace_status(workspace)
         except Exception as exc:
             import traceback

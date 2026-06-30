@@ -48,6 +48,7 @@ class CLIBundle:
     axial_eval_failed: str
     cleared_workspace: str
     interrupted: str
+    recursion_limit_reached: str
     bye: str
     status_unavailable: str
     workspace_prefix: str
@@ -108,9 +109,6 @@ class ProgressBundle:
     eval_aligned_pairs: str
     eval_no_pairs: str
     eval_dimension_mapping: str
-    eval_keyword_running: str
-    eval_keyword_written: str
-    eval_keyword_macro: str
     eval_semantic_macro: str
     eval_generating_report: str
     eval_saved: str
@@ -423,8 +421,8 @@ ZH_BUNDLE = TextBundle(
                 "  /status      - 查看 workspace 计数",
                 "  /tree        - 打印 codebook 树",
                 "  /export      - 导出 open coding JSON",
-                "  /eval:open   - 对比人工 benchmark 评测 open coding（默认 both）",
-                "  /eval:open keyword|semantic|both|metrics",
+                "  /eval:open   - 对比人工 benchmark 评测 open coding（默认 semantic）",
+                "  /eval:open semantic|metrics",
                 "               metrics = 从 eval/open/*.json 重新聚合 CPR（无 LLM）",
                 "  /eval:axial  - 对比人工 category 评测 axial coding（默认 both）",
                 "  /eval:axial keyword|semantic|both|metrics",
@@ -443,6 +441,7 @@ ZH_BUNDLE = TextBundle(
         axial_eval_failed="主轴评测失败: {error!r}",
         cleared_workspace="Cleared workspace (corpus/ and private/ preserved).",
         interrupted="已中断，可继续输入新指令",
+        recursion_limit_reached="已达到图递归上限（{limit}），本轮工具调用过多被中止。可设置环境变量 FLEX_AGENT_RECURSION_LIMIT 调高上限后重试。",
         bye="bye",
         status_unavailable="workspace · status unavailable: {error}",
         workspace_prefix="workspace",
@@ -458,7 +457,7 @@ ZH_BUNDLE = TextBundle(
         coded_and_benchmark="已编码文本: {coded_count}  人工 benchmark: {benchmark_path}",
         direct_input_line="输入: {input_path}  Direct 预测文本: {predicted_count}",
         open_keyword_section="一、条目层级 — 维度名匹配",
-        open_semantic_section="二、条目层级 — 逐文本证据对齐 (LLM)",
+        open_semantic_section="一、条目层级 — 逐文本证据对齐 (LLM)",
         axial_keyword_section="一、维度层级 — category 名匹配",
         axial_semantic_section="二、维度层级 — LLM 语义对齐",
         no_results="未生成任何评测结果。",
@@ -499,9 +498,6 @@ ZH_BUNDLE = TextBundle(
         eval_aligned_pairs="[eval] 对齐 {pairs} 对 (agent={coded_count}, human={human_count}, agent_only={agent_only})",
         eval_no_pairs="无可用对齐文本。请确认 coding/ 与 private/ benchmark 正文一致。",
         eval_dimension_mapping="[eval] LLM 维度名映射: {count} 个未匹配维度",
-        eval_keyword_running="[eval] keyword 逐条评测...",
-        eval_keyword_written="[eval] keyword 全量完成 → 写入 eval/open/*.json ({count} 条)",
-        eval_keyword_macro="[eval] keyword 聚合: C={consistency:.1%} P={precision:.1%} R={recall:.1%}",
         eval_semantic_macro="[eval] semantic 聚合: C={consistency:.1%} P={precision:.1%} R={recall:.1%} (complete {complete}/{total})",
         eval_generating_report="[eval] 生成报告...",
         eval_saved="[eval] 保存结果: {path}",
@@ -659,8 +655,8 @@ EN_BUNDLE = TextBundle(
                 "  /status      - show workspace counters",
                 "  /tree        - print codebook tree",
                 "  /export      - export open coding JSON",
-                "  /eval:open   - evaluate open coding vs human benchmark (default: both)",
-                "  /eval:open keyword|semantic|both|metrics",
+                "  /eval:open   - evaluate open coding vs human benchmark (default: semantic)",
+                "  /eval:open semantic|metrics",
                 "               metrics = re-aggregate CPR from eval/open/*.json (no LLM)",
                 "  /eval:axial  - evaluate axial coding vs human categories (default: both)",
                 "  /eval:axial keyword|semantic|both|metrics",
@@ -679,6 +675,7 @@ EN_BUNDLE = TextBundle(
         axial_eval_failed="Axial evaluation failed: {error!r}",
         cleared_workspace="Cleared workspace (corpus/ and private/ preserved).",
         interrupted="Interrupted; you can enter a new instruction",
+        recursion_limit_reached="Graph recursion limit reached ({limit}); this turn had too many tool calls and was aborted. Raise FLEX_AGENT_RECURSION_LIMIT and retry.",
         bye="bye",
         status_unavailable="workspace · status unavailable: {error}",
         workspace_prefix="workspace",
@@ -694,7 +691,7 @@ EN_BUNDLE = TextBundle(
         coded_and_benchmark="Coded texts: {coded_count}  Human benchmark: {benchmark_path}",
         direct_input_line="Input: {input_path}  Direct predicted texts: {predicted_count}",
         open_keyword_section="1. Item Level - Dimension Name Match",
-        open_semantic_section="2. Item Level - Per-Text Evidence Alignment (LLM)",
+        open_semantic_section="1. Item Level - Per-Text Evidence Alignment (LLM)",
         axial_keyword_section="1. Dimension Level - Category Name Match",
         axial_semantic_section="2. Dimension Level - LLM Semantic Alignment",
         no_results="No evaluation results were generated.",
@@ -735,9 +732,6 @@ EN_BUNDLE = TextBundle(
         eval_aligned_pairs="[eval] Aligned {pairs} pairs (agent={coded_count}, human={human_count}, agent_only={agent_only})",
         eval_no_pairs="No aligned texts are available. Confirm coding/ and the private benchmark have matching content.",
         eval_dimension_mapping="[eval] LLM dimension-name mapping: {count} unmatched dimensions",
-        eval_keyword_running="[eval] Running keyword per-text evaluation...",
-        eval_keyword_written="[eval] Keyword pass complete -> wrote eval/open/*.json ({count} texts)",
-        eval_keyword_macro="[eval] keyword aggregate: C={consistency:.1%} P={precision:.1%} R={recall:.1%}",
         eval_semantic_macro="[eval] semantic aggregate: C={consistency:.1%} P={precision:.1%} R={recall:.1%} (complete {complete}/{total})",
         eval_generating_report="[eval] Generating report...",
         eval_saved="[eval] Saved result: {path}",

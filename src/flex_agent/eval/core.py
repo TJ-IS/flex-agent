@@ -84,36 +84,29 @@ def normalize_content_key(content: str) -> str:
     return "".join(without_tags.split())
 
 
-def human_items_from_record(record: dict[str, Any]) -> dict[str, int]:
-    """Extract normalized non-zero human dimensions from benchmark record."""
-    items: dict[str, int] = {}
+def human_items_from_record(record: dict[str, Any]) -> set[str]:
+    """Extract normalized active human dimensions from a benchmark record."""
+    items: set[str] = set()
     if isinstance(record.get("human_items"), list):
         for item in record.get("human_items", []):
-            value = item.get("value", 1)
-            if value == 0:
+            if item.get("value", 1) == 0:
                 continue
             dim = normalize_dimension(str(item.get("dimension", "")).strip())
             if dim:
-                items[dim] = int(value)
+                items.add(dim)
         return items
 
     for code_val in record.get("codes", {}).values():
-        value = code_val.get("value", 0)
-        if value != 0:
+        if code_val.get("value", 0) != 0:
             dim = normalize_dimension(str(code_val.get("dimension", "")).strip())
             if dim:
-                items[dim] = int(value)
+                items.add(dim)
     return items
 
 
-def make_item_set(items: dict[str, int]) -> set[str]:
-    """Convert {dim: polarity} to a set of 'dim:+1' / 'dim:-1' strings."""
-    return {f"{dim}:{'+' if pol > 0 else '-'}1" for dim, pol in items.items()}
-
-
-def load_human_benchmark(jsonl_path: Path) -> dict[int, dict[str, int]]:
+def load_human_benchmark(jsonl_path: Path) -> dict[int, set[str]]:
     """Load human-coded benchmark keyed by 1-indexed file order."""
-    human_items: dict[int, dict[str, int]] = {}
+    human_items: dict[int, set[str]] = {}
     with open(jsonl_path, encoding="utf-8") as handle:
         for idx, line in enumerate(handle, start=1):
             record = json.loads(line.strip())
@@ -123,9 +116,9 @@ def load_human_benchmark(jsonl_path: Path) -> dict[int, dict[str, int]]:
     return human_items
 
 
-def load_human_benchmark_by_content(jsonl_path: Path) -> dict[str, dict[str, int]]:
+def load_human_benchmark_by_content(jsonl_path: Path) -> dict[str, set[str]]:
     """Load human-coded benchmark keyed by normalized comment content."""
-    human_items_by_content: dict[str, dict[str, int]] = {}
+    human_items_by_content: dict[str, set[str]] = {}
     with open(jsonl_path, encoding="utf-8") as handle:
         for line in handle:
             record = json.loads(line.strip())
@@ -156,40 +149,30 @@ def load_human_records_by_content(jsonl_path: Path) -> dict[str, dict[str, Any]]
     return records
 
 
-def extract_agent_items(finished_texts: list[dict]) -> dict[int, dict[str, int]]:
-    """Extract per-text items from finished_texts; ignores polarity for matching."""
-    agent_items: dict[int, dict[str, int]] = {}
+def extract_agent_items(finished_texts: list[dict]) -> dict[int, set[str]]:
+    """Extract per-text dimension sets from finished_texts."""
+    agent_items: dict[int, set[str]] = {}
     for ft in finished_texts:
         text_id = ft["id"]
-        items: dict[str, int] = {}
+        dims: set[str] = set()
         for item in ft.get("items", []):
             normalized = str(item.get("normalized_label") or "").strip()
             if normalized:
                 dim = normalize_dimension(re.split(r"[:：]", normalized, maxsplit=1)[0].strip())
-                if dim and dim not in items:
-                    items[dim] = 1
+                if dim:
+                    dims.add(dim)
                 continue
 
-            labels_str = item.get("labels", "") or ""
-            for label in labels_str.split(";"):
-                label = label.strip()
-                if not label or (":" not in label and "：" not in label):
+            labels_str = str(item.get("labels", "") or "")
+            for raw in labels_str.replace("；", ";").split(";"):
+                label = raw.strip()
+                if not label:
                     continue
-                parts = re.split(r"[:：]", label, maxsplit=1)
-                if len(parts) != 2:
-                    continue
-                dim_raw, pol_str = parts
-                dim = normalize_dimension(dim_raw)
-                try:
-                    pol = int(pol_str)
-                except ValueError:
-                    continue
-                if pol not in (-1, 1):
-                    continue
-                if dim not in items:
-                    items[dim] = pol
-        if items:
-            agent_items[text_id] = items
+                dim = normalize_dimension(re.split(r"[:：]", label, maxsplit=1)[0].strip())
+                if dim:
+                    dims.add(dim)
+        if dims:
+            agent_items[text_id] = dims
     return agent_items
 
 

@@ -22,7 +22,7 @@ class OpenCodingQualityTests(unittest.TestCase):
 
         parsed = parse_labels(labels, warnings)
 
-        self.assertEqual(parsed, ["专业度:+1", "趣味性:+1", "态度:+1"])
+        self.assertEqual(parsed, ["专业度", "趣味性", "态度"])
 
     def test_clean_content_markup_rewrites_non_p_tags(self) -> None:
         cleaned, warnings = clean_content_markup(

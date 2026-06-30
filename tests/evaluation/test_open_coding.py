@@ -10,12 +10,9 @@ from flex_agent.eval.core import (
     extract_agent_items,
     extract_agent_items_raw,
     load_human_benchmark,
-    make_item_set,
     normalize_dimension,
 )
-from flex_agent.eval.metrics import compute_item_metrics_simple
 from flex_agent.eval.prompts import dimension_name_alignment_prompt, text_alignment_prompt
-from flex_agent.eval.semantic import apply_semantic_alignment
 from flex_agent.eval.text_alignment import BatchSemanticAlignment, build_semantic_alignment_for_texts
 from flex_agent.models import FinishedItemDetail, FinishedTextItem
 from flex_agent.workspace import Workspace
@@ -32,13 +29,6 @@ class NormalizeDimensionTests(unittest.TestCase):
         self.assertEqual(normalize_dimension("staff_patience"), "专业度")
         self.assertEqual(normalize_dimension("visual_quality"), "画面")
         self.assertEqual(normalize_dimension("revisit_intention"), "二刷意愿")
-
-
-class MakeItemSetTests(unittest.TestCase):
-    def test_converts_to_labeled_set(self) -> None:
-        items = {"画面": 1, "态度": -1, "价格": 1}
-        result = make_item_set(items)
-        self.assertEqual(result, {"画面:+1", "态度:-1", "价格:+1"})
 
 
 class LoadHumanBenchmarkTests(unittest.TestCase):
@@ -58,49 +48,46 @@ class LoadHumanBenchmarkTests(unittest.TestCase):
     def test_loads_nonzero_codes_only(self) -> None:
         result = load_human_benchmark(Path(self.tmp.name))
         self.assertEqual(len(result), 2)
-        self.assertEqual(result[1], {"画面": 1})
-        self.assertEqual(result[2], {"态度": -1})
+        self.assertEqual(result[1], {"画面"})
+        self.assertEqual(result[2], {"态度"})
 
 
-class ComputeItemMetricsSimpleTests(unittest.TestCase):
-    def test_perfect_match(self) -> None:
-        human = {1: {"画面": 1, "态度": 1}}
-        agent = {1: {"画面": 1, "态度": 1}}
-        result = compute_item_metrics_simple(human, agent)
-        self.assertEqual(result["macro"]["consistency"], 1.0)
+class ExtractAgentItemsTests(unittest.TestCase):
+    def test_collects_dimension_set_dropping_polarity(self) -> None:
+        finished = [
+            {
+                "id": 1,
+                "items": [
+                    {"normalized_label": "画面", "name": "画面清晰"},
+                    {"normalized_label": "态度", "name": "服务好"},
+                ],
+            }
+        ]
+        result = extract_agent_items(finished)
+        self.assertEqual(result, {1: {"画面", "态度"}})
 
-    def test_partial_overlap(self) -> None:
-        human = {1: {"画面": 1, "态度": 1, "趣味性": 1}}
-        agent = {1: {"画面": 1, "价格": 1}}
-        result = compute_item_metrics_simple(human, agent)
-        self.assertEqual(result["macro"]["n_intersection"], 1)
-        self.assertEqual(result["macro"]["consistency"], 0.25)
-        self.assertEqual(result["micro"]["precision"], 0.5)
-        self.assertAlmostEqual(result["micro"]["recall"], 1 / 3, places=4)
-
-    def test_macro_vs_micro_across_texts(self) -> None:
-        human = {
-            1: {"画面": 1},
-            2: {"画面": 1, "态度": 1, "趣味性": 1},
-        }
-        agent = {
-            1: {"画面": 1},
-            2: {"画面": 1, "价格": 1},
-        }
-        result = compute_item_metrics_simple(human, agent)
-        self.assertEqual(result["macro"]["precision"], 0.75)
-        self.assertAlmostEqual(result["micro"]["precision"], 2 / 3, places=4)
+    def test_legacy_labels_without_polarity_are_collected(self) -> None:
+        finished = [
+            {
+                "id": 2,
+                "items": [
+                    {"labels": "画面;态度", "name": "x"},
+                ],
+            }
+        ]
+        result = extract_agent_items(finished)
+        self.assertEqual(result, {2: {"画面", "态度"}})
 
 
 class EvalPromptTests(unittest.TestCase):
-    def test_text_alignment_prompt_has_placeholder(self) -> None:
+    def test_text_alignment_prompt_has_placeholder_and_one_to_many(self) -> None:
         prompt = text_alignment_prompt()
         self.assertIn("{texts_json}", prompt)
         self.assertNotIn("ReAct", prompt)
         self.assertIn("允许多对一", prompt)
+        self.assertIn("一对多", prompt)
+        self.assertIn("matched_human_dimensions", prompt)
         self.assertIn("只输出 JSON", prompt)
-        self.assertNotIn("游戏趣味性", prompt)
-        self.assertNotIn("例如", prompt)
 
     def test_dimension_name_alignment_prompt_formats_lists(self) -> None:
         prompt = dimension_name_alignment_prompt(human_list="- 画面", agent_list="- 视觉质量")
@@ -111,23 +98,16 @@ class EvalPromptTests(unittest.TestCase):
         self.assertIn("只输出 JSON", prompt)
         self.assertNotIn("例如", prompt)
 
-    def test_semantic_alignment_schema_does_not_reference_react(self) -> None:
+    def test_semantic_alignment_schema_uses_list_match_field(self) -> None:
         schema_text = json.dumps(BatchSemanticAlignment.model_json_schema(), ensure_ascii=False)
         self.assertNotIn("ReAct", schema_text)
+        self.assertIn("matched_human_dimensions", schema_text)
         self.assertIn("可选的简短判断依据", schema_text)
-        self.assertIn("可选的简短匹配结果标记", schema_text)
-
-
-class SemanticAlignmentTests(unittest.TestCase):
-    def test_remaps_agent_dimensions(self) -> None:
-        agent_items = {1: {"视觉质量": 1, "趣味性": -1}}
-        alignment = {"视觉质量": "画面"}
-        result = apply_semantic_alignment(agent_items, alignment)
-        self.assertEqual(result[1], {"画面": 1, "趣味性": -1})
+        self.assertNotIn("\"matched_human_dimension\"", schema_text)
 
 
 class SemanticAlignmentLLMTests(unittest.TestCase):
-    def test_validates_fake_llm_structured_output(self) -> None:
+    def test_validates_fake_llm_structured_output_one_to_many(self) -> None:
         class FakeChain:
             def invoke(self, payload):
                 from flex_agent.eval.text_alignment import (
@@ -141,8 +121,11 @@ class SemanticAlignmentLLMTests(unittest.TestCase):
                         TextSemanticAlignment(
                             text_id="1",
                             matches=[
-                                SemanticMatch(agent_dimension="视觉质量", matched_human_dimension="画面"),
-                                SemanticMatch(agent_dimension="价格", matched_human_dimension="不存在"),
+                                SemanticMatch(
+                                    agent_dimension="场景真实感",
+                                    matched_human_dimensions=["画面", "声音"],
+                                ),
+                                SemanticMatch(agent_dimension="价格", matched_human_dimensions=[]),
                             ],
                         )
                     ]
@@ -159,10 +142,10 @@ class SemanticAlignmentLLMTests(unittest.TestCase):
         entries = [
             {
                 "text_id": 1,
-                "content": "画面很好",
-                "human_items": [{"dimension": "画面", "evidences": ["画面很好"]}],
+                "content": "画面和声音都很棒",
+                "human_items": [{"dimension": "画面", "evidences": []}, {"dimension": "声音", "evidences": []}],
                 "agent_items": [
-                    {"dimension": "视觉质量", "evidences": ["画面很好"]},
+                    {"dimension": "场景真实感", "evidences": ["画面和声音都很棒"]},
                     {"dimension": "价格", "evidences": ["便宜"]},
                 ],
             }
@@ -172,120 +155,101 @@ class SemanticAlignmentLLMTests(unittest.TestCase):
             return_value=FakePrompt(),
         ):
             result = build_semantic_alignment_for_texts(entries, FakeLLM())
-        self.assertEqual(result[1]["视觉质量"], "画面")
+        self.assertEqual(set(result[1]["场景真实感"]), {"画面", "声音"})
         self.assertIsNone(result[1]["价格"])
 
 
-class PartialSemanticMetricsTests(unittest.TestCase):
-    def test_aggregate_partial_metrics(self) -> None:
-        from flex_agent.eval.text_alignment import _aggregate_semantic_metrics
+class EvaluateWorkspaceMetricsTests(unittest.TestCase):
+    def _setup_workspace(self, tmpdir: str) -> Workspace:
+        root = Path(tmpdir)
+        workspace = Workspace(root)
+        workspace.ensure_layout()
+        workspace.human_benchmark_path.parent.mkdir(parents=True, exist_ok=True)
+        workspace.human_benchmark_path.write_text(
+            json.dumps(
+                {
+                    "comments": "画面很好",
+                    "human_items": [{"dimension": "画面", "value": 1, "evidences": []}],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        workspace.corpus_seed_path.write_text(
+            json.dumps({"id": 1, "comments": "画面很好"}, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        workspace.save_coding(
+            FinishedTextItem(
+                id=1,
+                content="画面很好",
+                content_with_labels="画面很好",
+                items=[FinishedItemDetail(name="画面清晰", normalized_label="画面")],
+            )
+        )
+        return workspace
 
-        entries = [
-            {
-                "text_id": 1,
-                "human_items": [{"dimension": "画面"}],
-                "agent_items": [{"dimension": "画面"}, {"dimension": "价格"}],
-            },
-            {
-                "text_id": 2,
-                "human_items": [{"dimension": "态度"}],
-                "agent_items": [{"dimension": "态度"}, {"dimension": "环境"}],
-            },
-        ]
-        alignments = {
-            1: {"画面": "画面", "价格": None},
-            2: {"态度": "态度", "环境": None},
-        }
-        partial = _aggregate_semantic_metrics(entries[:1], {1: alignments[1]})
-        self.assertEqual(partial["common_texts"], 1)
-        self.assertEqual(partial["macro"]["n_intersection"], 1)
-
-        missing = _aggregate_semantic_metrics(entries[:1], {})
-        self.assertEqual(missing["macro"]["n_intersection"], 0)
-
-        full = _aggregate_semantic_metrics(entries, alignments)
-        self.assertEqual(full["common_texts"], 2)
-        self.assertEqual(full["macro"]["n_intersection"], 2)
-
-
-class EvaluateWorkspaceTests(unittest.TestCase):
-    def test_evaluate_workspace_keyword_mode(self) -> None:
+    def test_evaluate_workspace_metrics_mode(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            workspace = Workspace(root)
-            workspace.ensure_layout()
-
-            human_path = workspace.human_benchmark_path
-            human_path.parent.mkdir(parents=True, exist_ok=True)
-            human_path.write_text(
-                json.dumps(
-                    {
-                        "comments": "画面很好",
-                        "human_items": [{"dimension": "画面", "value": 1, "evidences": []}],
+            workspace = self._setup_workspace(tmpdir)
+            workspace.save_eval_text(
+                "open",
+                1,
+                {
+                    "text_id": 1,
+                    "semantic": {
+                        "text_id": 1,
+                        "human_items": ["画面"],
+                        "agent_items": ["画面"],
+                        "both": ["画面"],
+                        "llm_only": [],
+                        "human_only": [],
+                        "nums_both": 1,
+                        "nums_llm_only": 0,
+                        "nums_human_only": 0,
+                        "consistency": 1.0,
+                        "precision": 1.0,
+                        "recall": 1.0,
+                        "status": "complete",
+                        "alignment": {"画面": "画面"},
                     },
-                    ensure_ascii=False,
-                )
-                + "\n",
-                encoding="utf-8",
+                },
             )
-            workspace.corpus_seed_path.write_text(
-                json.dumps({"id": 1, "comments": "画面很好"}, ensure_ascii=False) + "\n",
-                encoding="utf-8",
-            )
-
-            workspace.save_coding(
-                FinishedTextItem(
-                    id=1,
-                    content="画面很好",
-                    content_with_labels="画面很好",
-                    items=[
-                        FinishedItemDetail(
-                            name="画面清晰",
-                            normalized_label="画面",
-                            evidence="画面很好",
-                        )
-                    ],
-                )
-            )
-
             from flex_agent.eval.runner import evaluate_workspace
 
-            report = evaluate_workspace(workspace, mode="keyword", save_json=False, on_progress=None)
-            self.assertIn("维度名匹配", report)
+            report = evaluate_workspace(workspace, mode="metrics", save_json=False, on_progress=None)
             self.assertIn("100.0%", report)
 
     def test_evaluate_workspace_persists_under_eval_open(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            workspace = Workspace(Path(tmpdir))
-            workspace.ensure_layout()
-            workspace.human_benchmark_path.parent.mkdir(parents=True, exist_ok=True)
-            workspace.human_benchmark_path.write_text(
-                json.dumps(
-                    {
-                        "comments": "画面很好",
-                        "human_items": [{"dimension": "画面", "value": 1, "evidences": []}],
+            workspace = self._setup_workspace(tmpdir)
+            workspace.save_eval_text(
+                "open",
+                1,
+                {
+                    "text_id": 1,
+                    "semantic": {
+                        "text_id": 1,
+                        "human_items": ["画面"],
+                        "agent_items": ["画面"],
+                        "both": ["画面"],
+                        "llm_only": [],
+                        "human_only": [],
+                        "nums_both": 1,
+                        "nums_llm_only": 0,
+                        "nums_human_only": 0,
+                        "consistency": 1.0,
+                        "precision": 1.0,
+                        "recall": 1.0,
+                        "status": "complete",
+                        "alignment": {"画面": "画面"},
                     },
-                    ensure_ascii=False,
-                )
-                + "\n",
-                encoding="utf-8",
+                },
             )
-            workspace.corpus_seed_path.write_text(
-                json.dumps({"id": 1, "comments": "画面很好"}, ensure_ascii=False) + "\n",
-                encoding="utf-8",
-            )
-            workspace.save_coding(
-                FinishedTextItem(
-                    id=1,
-                    content="画面很好",
-                    content_with_labels="画面很好",
-                    items=[FinishedItemDetail(name="画面清晰", normalized_label="画面")],
-                )
-            )
-
             from flex_agent.eval.runner import evaluate_workspace
 
-            report = evaluate_workspace(workspace, mode="keyword", save_json=True, on_progress=None)
+            report = evaluate_workspace(workspace, mode="metrics", save_json=True, on_progress=None)
             self.assertIn("eval/open/summary.json", report)
             self.assertFalse(any(workspace.exports_dir.glob("eval_open_*.json")))
             self.assertTrue(workspace.eval_summary_path("open").exists())
@@ -301,7 +265,7 @@ class AggregateEvalResultsTests(unittest.TestCase):
                 json.dumps(
                     {
                         "text_id": 1,
-                        "keyword": {
+                        "semantic": {
                             "text_id": 1,
                             "human_items": ["画面"],
                             "agent_items": ["画面"],
@@ -315,6 +279,7 @@ class AggregateEvalResultsTests(unittest.TestCase):
                             "precision": 1.0,
                             "recall": 1.0,
                             "status": "complete",
+                            "alignment": {"画面": "画面"},
                         },
                     },
                     ensure_ascii=False,
@@ -324,28 +289,12 @@ class AggregateEvalResultsTests(unittest.TestCase):
             from flex_agent.eval.aggregate import aggregate_eval_results
 
             agg = aggregate_eval_results(eval_dir)
-            self.assertEqual(agg["keyword_complete"], 1)
-            self.assertEqual(agg["item_level_keyword"]["macro"]["consistency"], 1.0)
+            self.assertEqual(agg["semantic_complete"], 1)
+            self.assertEqual(agg["item_level_semantic"]["macro"]["consistency"], 1.0)
+            self.assertNotIn("item_level_keyword", agg)
 
 
-class JudgeKeywordTests(unittest.TestCase):
-    def test_judge_keyword_perfect_match(self) -> None:
-        from flex_agent.eval.judge import judge_keyword
-        from flex_agent.eval.pairs import EvalPair
-
-        pair = EvalPair(
-            text_id=1,
-            content="画面很好",
-            human_items={"画面": 1},
-            human_record={"human_items": [{"dimension": "画面", "value": 1}]},
-            agent_items_raw=[{"normalized_label": "画面", "name": "画面清晰"}],
-        )
-        result = judge_keyword(pair)
-        self.assertEqual(result["status"], "complete")
-        self.assertEqual(result["nums_both"], 1)
-
-
-class JudgeSemanticFailureTests(unittest.TestCase):
+class JudgeSemanticTests(unittest.TestCase):
     def test_llm_failure_marks_failed_without_crash(self) -> None:
         from flex_agent.eval.judge import judge_semantic
         from flex_agent.eval.pairs import EvalPair
@@ -353,7 +302,7 @@ class JudgeSemanticFailureTests(unittest.TestCase):
         pair = EvalPair(
             text_id=1,
             content="画面很好",
-            human_items={"画面": 1},
+            human_items={"画面"},
             human_record={"human_items": [{"dimension": "画面", "value": 1}]},
             agent_items_raw=[{"normalized_label": "完全无关", "name": "无关"}],
         )
@@ -370,6 +319,58 @@ class JudgeSemanticFailureTests(unittest.TestCase):
         self.assertEqual(result["status"], "complete")
         self.assertEqual(result["nums_both"], 0)
 
+    def test_falls_back_to_heuristic_when_llm_returns_empty(self) -> None:
+        from flex_agent.eval.judge import judge_semantic
+        from flex_agent.eval.pairs import EvalPair
+
+        pair = EvalPair(
+            text_id=1,
+            content="很好玩",
+            human_items={"趣味性"},
+            human_record={"human_items": [{"dimension": "趣味性", "value": 1}]},
+            agent_items_raw=[
+                {"normalized_label": "游戏趣味性", "name": "游戏有趣", "evidence": "很好玩"},
+                {"normalized_label": "环境", "name": "环境好"},
+            ],
+        )
+
+        class EmptyLLM:
+            def with_structured_output(self, schema, method="json_schema"):
+                return self
+
+        with patch(
+            "flex_agent.eval.judge.build_semantic_alignment_for_texts",
+            return_value={1: {"游戏趣味性": None, "环境": None}},
+        ):
+            result = judge_semantic(pair, EmptyLLM())
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(result["alignment"]["游戏趣味性"], ["趣味性"])
+
+    def test_one_to_many_alignment_counts_multiple_human(self) -> None:
+        from flex_agent.eval.judge import judge_semantic
+        from flex_agent.eval.pairs import EvalPair
+
+        pair = EvalPair(
+            text_id=1,
+            content="画面声音都很棒",
+            human_items={"画面", "声音", "其他感官"},
+            human_record={"human_items": [{"dimension": "画面", "value": 1}]},
+            agent_items_raw=[{"normalized_label": "场景真实感", "name": "沉浸"}],
+        )
+
+        class FakeLLM:
+            def with_structured_output(self, schema, method="json_schema"):
+                return self
+
+        with patch(
+            "flex_agent.eval.judge.build_semantic_alignment_for_texts",
+            return_value={1: {"场景真实感": ["画面", "声音", "其他感官"]}},
+        ):
+            result = judge_semantic(pair, FakeLLM())
+        self.assertEqual(result["nums_both"], 1)
+        self.assertEqual(result["human_only"], [])
+        self.assertEqual(result["recall"], 1.0)
+
 
 class SemanticMetricsTests(unittest.TestCase):
     def test_human_only_not_inflated_when_aligned(self) -> None:
@@ -384,6 +385,21 @@ class SemanticMetricsTests(unittest.TestCase):
         self.assertEqual(row["human_only"], [])
         self.assertEqual(row["nums_both"], 2)
         self.assertEqual(row["recall"], 1.0)
+
+    def test_one_to_many_alignment(self) -> None:
+        from flex_agent.eval.semantic_metrics import build_semantic_row
+
+        row = build_semantic_row(
+            1,
+            {"画面", "声音", "其他感官", "态度"},
+            {"场景真实感", "服务周到"},
+            {"场景真实感": ["画面", "声音", "其他感官"], "服务周到": ["态度"]},
+        )
+        self.assertEqual(row["nums_both"], 2)
+        self.assertEqual(row["human_only"], [])
+        self.assertEqual(row["llm_only"], [])
+        self.assertEqual(row["recall"], 1.0)
+        self.assertEqual(row["precision"], 1.0)
 
     def test_prefetch_normalize_alias(self) -> None:
         from flex_agent.eval.semantic_metrics import prefetch_semantic_alignment
@@ -425,39 +441,6 @@ class SemanticMetricsTests(unittest.TestCase):
         self.assertEqual(matches["游戏趣味性"], "趣味性")
         self.assertEqual(matches["趣味性体验"], "趣味性")
 
-    def test_react_action_fallback_parsing(self) -> None:
-        from flex_agent.eval.text_alignment import _human_from_react_action
-
-        self.assertEqual(_human_from_react_action("MATCH 趣味性", {"趣味性"}), "趣味性")
-        self.assertIsNone(_human_from_react_action("NO_MATCH", {"趣味性"}))
-
-    def test_judge_semantic_falls_back_when_llm_returns_empty(self) -> None:
-        from flex_agent.eval.judge import judge_semantic
-        from flex_agent.eval.pairs import EvalPair
-
-        pair = EvalPair(
-            text_id=1,
-            content="很好玩",
-            human_items={"趣味性": 1},
-            human_record={"human_items": [{"dimension": "趣味性", "value": 1}]},
-            agent_items_raw=[
-                {"normalized_label": "游戏趣味性", "name": "游戏有趣", "evidence": "很好玩"},
-                {"normalized_label": "环境", "name": "环境好"},
-            ],
-        )
-
-        class EmptyLLM:
-            def with_structured_output(self, schema, method="json_schema"):
-                return self
-
-        with patch(
-            "flex_agent.eval.judge.build_semantic_alignment_for_texts",
-            return_value={1: {"游戏趣味性": None, "环境": None}},
-        ):
-            result = judge_semantic(pair, EmptyLLM())
-        self.assertEqual(result["status"], "complete")
-        self.assertEqual(result["alignment"]["游戏趣味性"], "趣味性")
-
     def test_aggregate_recomputes_from_alignment(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             eval_dir = Path(tmpdir)
@@ -494,45 +477,6 @@ class SemanticMetricsTests(unittest.TestCase):
             self.assertEqual(macro["n_intersection"], 1)
             self.assertEqual(macro["recall"], 1.0)
             self.assertAlmostEqual(macro["consistency"], 1 / 3, places=3)
-
-
-class MetricsOnlyEvalTests(unittest.TestCase):
-    def test_metrics_mode_reaggregates_from_disk(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            workspace = Workspace(Path(tmpdir))
-            workspace.ensure_layout()
-            workspace.save_eval_text(
-                "open",
-                1,
-                {
-                    "text_id": 1,
-                    "keyword": {
-                        "text_id": 1,
-                        "human_items": ["画面"],
-                        "agent_items": ["画面"],
-                        "both": ["画面"],
-                        "llm_only": [],
-                        "human_only": [],
-                        "nums_both": 1,
-                        "nums_llm_only": 0,
-                        "nums_human_only": 0,
-                        "consistency": 1.0,
-                        "precision": 1.0,
-                        "recall": 1.0,
-                        "status": "complete",
-                    },
-                },
-            )
-            workspace.save_eval_summary(
-                "open",
-                payload={"mode": "keyword", "status": "complete", "coded_count": 1},
-                report="stub",
-                meta={"coded_count": 1, "benchmark_path": str(workspace.human_benchmark_path)},
-            )
-            from flex_agent.eval.runner import aggregate_workspace_eval
-
-            report = aggregate_workspace_eval(workspace, mode="keyword", on_progress=None)
-            self.assertIn("100.0%", report)
 
 
 class SemanticResumeTests(unittest.TestCase):

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sys
-from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
@@ -11,30 +10,6 @@ from flex_agent.eval.prompts import dimension_name_alignment_prompt
 from flex_agent.eval.async_utils import run_async
 from flex_agent.i18n import get_bundle
 from flex_agent.llm.structured_output import ainvoke_structured
-
-
-def apply_semantic_alignment(
-    agent_items: dict[int, dict[str, int]],
-    alignment: dict[str, str | None],
-) -> dict[int, dict[str, int]]:
-    """Rewrite agent dimension names according to semantic alignment mapping."""
-    if not alignment:
-        return agent_items
-    result: dict[int, dict[str, int]] = {}
-    for text_id, items in agent_items.items():
-        mapped: dict[str, int] = {}
-        for dim, pol in items.items():
-            if dim in alignment:
-                target = alignment[dim]
-                if target is None:
-                    continue
-                if target not in mapped:
-                    mapped[target] = pol
-            elif dim not in mapped:
-                mapped[dim] = pol
-        if mapped:
-            result[text_id] = mapped
-    return result
 
 
 async def abuild_dimension_name_alignment(

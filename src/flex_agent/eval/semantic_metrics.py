@@ -112,14 +112,28 @@ def build_semantic_row(
     text_id: int,
     human_dims: set[str],
     agent_dims: set[str],
-    alignment: dict[str, str | None],
+    alignment: dict[str, str | list[str] | None],
     *,
     status: str = "complete",
     error: str | None = None,
 ) -> dict[str, Any]:
-    """Build a consistent semantic result row from an alignment map."""
-    matched_agent = {agent for agent, human in alignment.items() if human}
-    matched_human = {human for human in alignment.values() if human}
+    """Build a consistent semantic result row from an alignment map.
+
+    ``alignment`` maps each agent dimension to either a single human dimension
+    (str), a list of human dimensions (one-to-many), or None. Single str values
+    are normalized to a one-element list so callers using strict one-to-one
+    alignment (e.g. axial eval) remain compatible.
+    """
+    matched_agent: set[str] = set()
+    matched_human: set[str] = set()
+    for agent_dim, human_val in alignment.items():
+        if not human_val:
+            continue
+        humans = [human_val] if isinstance(human_val, str) else [h for h in human_val if h]
+        valid = {h for h in humans if h in human_dims}
+        if valid:
+            matched_agent.add(agent_dim)
+            matched_human.update(valid)
     llm_only = agent_dims - matched_agent
     human_only = human_dims - matched_human
     nums_both = len(matched_agent)

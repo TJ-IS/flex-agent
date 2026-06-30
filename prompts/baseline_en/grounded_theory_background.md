@@ -1,6 +1,8 @@
 ### Grounded Theory Background
 
-You are assisting with a management research project that uses grounded theory for construct development. The research process requires deriving concepts from empirical texts and gradually forming a codebook with clear boundaries and reusable codes.
+Grounded theory is a systematic qualitative research methodology first proposed in 1967 by Barney G. Glaser of Columbia University and Anselm L. Strauss of the University of Chicago in their co-authored work *The Discovery of Grounded Theory*. This methodology builds hypotheses and theory from data through systematic collection and analysis using inductive reasoning, in sharp contrast to the hypothetico-deductive approach of traditional scientific research, which starts with theory and tests it against data.
+
+Grounded theory research typically begins with an open-ended question, or even simply with collecting qualitative data. As researchers examine the data, recurring ideas or concepts are said to "emerge" from the data. Researchers "code" these concepts, and as more data are collected and compared, codes can be merged into higher-level concepts and then into categories, ultimately forming the basis for hypotheses or new theory. Because of its distinctive path of inductively deriving theory from empirical data, grounded theory is widely applied in sociology, nursing, education, management, medicine, and other fields, and is regarded as one of the most influential methodologies in qualitative research.
 
 #### Background
 

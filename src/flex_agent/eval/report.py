@@ -53,7 +53,6 @@ def _format_item_section(title: str, item_result: dict[str, Any], *, language: s
 
 def format_open_coding_report(
     *,
-    item_keyword: dict[str, Any] | None,
     item_semantic: dict[str, Any] | None,
     coded_count: int,
     benchmark_path: str,
@@ -69,15 +68,11 @@ def format_open_coding_report(
         sep,
     ]
 
-    if item_keyword is not None:
-        lines.extend(_format_item_section(text.open_keyword_section, item_keyword, language=language))
-        lines.append("")
-
     if item_semantic is not None:
         lines.extend(_format_item_section(text.open_semantic_section, item_semantic, language=language))
         lines.append("")
 
-    if item_keyword is None and item_semantic is None:
+    if item_semantic is None:
         lines.append(text.no_results)
 
     lines.append(sep)

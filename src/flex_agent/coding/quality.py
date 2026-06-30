@@ -10,7 +10,6 @@ from typing import Any, Iterable, Sequence
 from flex_agent.models import DimensionDetail, FinishedItemDetail, FinishedTextItem
 
 
-POLARITY_RE = re.compile(r"^\s*([^:：]+?)\s*[:：]\s*([+-]1)\s*$")
 SPAN_LABEL_RE = re.compile(
     r"<span[^>]*title=[\"']([^\"']+)[\"'][^>]*>(.*?)</span>",
     flags=re.IGNORECASE | re.DOTALL,
@@ -195,15 +194,12 @@ def item_dimension(item: FinishedItemDetail, warnings: QualityWarnings | None = 
 
     raw = (item.normalized_label or "").strip()
     if raw:
-        match = POLARITY_RE.match(raw)
-        if match:
-            raw = match.group(1)
         return normalize_label_dimension(raw, active_warnings)
 
     if item.labels:
         parsed = parse_labels(item.labels, active_warnings)
         if parsed:
-            return parsed[0].split(":", maxsplit=1)[0]
+            return parsed[0]
 
     if item.name:
         return normalize_label_dimension(item.name.strip(), active_warnings)
@@ -216,12 +212,17 @@ def item_dimensions(item: FinishedItemDetail, warnings: QualityWarnings | None =
         dimension = item_dimension(item, warnings)
         return [dimension] if dimension else []
     if item.labels:
-        return [label.split(":", maxsplit=1)[0] for label in parse_labels(item.labels, warnings)]
+        return list(parse_labels(item.labels, warnings))
     dimension = item_dimension(item, warnings)
     return [dimension] if dimension else []
 
 
 def parse_labels(labels: str, warnings: QualityWarnings | None = None) -> list[str]:
+    """Parse a label string into a list of normalized dimension names.
+
+    Accepts both legacy ``"dim:+1;dim2:-1"`` polarity-encoded form and the
+    current plain ``"dim;dim2"`` form. Polarity suffixes are dropped.
+    """
     active_warnings = warnings if warnings is not None else QualityWarnings()
     parsed: list[str] = []
     seen: set[str] = set()
@@ -233,18 +234,13 @@ def parse_labels(labels: str, warnings: QualityWarnings | None = None) -> list[s
             active_warnings.neutral_labels += 1
             active_warnings.dropped_labels += 1
             continue
-        match = POLARITY_RE.match(label)
-        if not match:
-            active_warnings.malformed_labels += 1
-            active_warnings.dropped_labels += 1
-            continue
-        dimension = normalize_label_dimension(match.group(1), active_warnings)
+        dim_part = re.split(r"[:：]", label, maxsplit=1)[0].strip()
+        dimension = normalize_label_dimension(dim_part, active_warnings)
         if dimension is None:
             continue
-        normalized_label = f"{dimension}:{match.group(2)}"
-        if normalized_label not in seen:
-            parsed.append(normalized_label)
-            seen.add(normalized_label)
+        if dimension not in seen:
+            parsed.append(dimension)
+            seen.add(dimension)
     return parsed
 
 
@@ -270,8 +266,7 @@ def normalize_item(item: FinishedItemDetail) -> tuple[list[FinishedItemDetail], 
     if item.labels:
         parsed_labels = parse_labels(item.labels, warnings)
         normalized_items: list[FinishedItemDetail] = []
-        for label in parsed_labels:
-            dimension = label.split(":", maxsplit=1)[0]
+        for dimension in parsed_labels:
             normalized_items.append(
                 FinishedItemDetail(
                     name=(item.name or evidence or dimension).strip(),

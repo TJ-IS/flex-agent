@@ -181,7 +181,7 @@ def load_update_batch_size(default: int = 20) -> int:
     return size
 
 
-def load_recursion_limit(default: int = 50) -> int:
+def load_recursion_limit(default: int = 200) -> int:
     raw = os.getenv("FLEX_AGENT_RECURSION_LIMIT", str(default)).strip()
     try:
         limit = int(raw)

@@ -13,7 +13,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field, create_model
 
 from flex_agent.eval.async_utils import run_async
-from flex_agent.eval.core import EvalMetrics, micro_from_counts, normalize_dimension
+from flex_agent.eval.core import normalize_dimension
 from flex_agent.eval.prompts import text_alignment_prompt
 from flex_agent.i18n import Language, get_bundle, get_language, resolve_language
 from flex_agent.llm.structured_output import ainvoke_structured
@@ -23,9 +23,8 @@ _DEFAULT_SCHEMA_DESCRIPTIONS = get_bundle("zh").llm.schema_descriptions
 
 class SemanticMatch(BaseModel):
     agent_dimension: str
-    matched_human_dimension: str | None = None
+    matched_human_dimensions: list[str] = Field(default_factory=list)
     thought: str = Field(default="", description=_DEFAULT_SCHEMA_DESCRIPTIONS["semantic_match_thought"])
-    action: str = Field(default="", description=_DEFAULT_SCHEMA_DESCRIPTIONS["semantic_match_action"])
 
 
 class TextSemanticAlignment(BaseModel):
@@ -53,9 +52,8 @@ def _get_batch_semantic_alignment_model(active_language: Language) -> type[BaseM
     semantic_match = create_model(
         f"SemanticMatch{suffix}",
         agent_dimension=(str, ...),
-        matched_human_dimension=(str | None, None),
+        matched_human_dimensions=(list[str], Field(default_factory=list)),
         thought=(str, Field(default="", description=descriptions["semantic_match_thought"])),
-        action=(str, Field(default="", description=descriptions["semantic_match_action"])),
     )
     text_alignment = create_model(
         f"TextSemanticAlignment{suffix}",
@@ -72,12 +70,11 @@ def _get_batch_semantic_alignment_model(active_language: Language) -> type[BaseM
     )
 
 
-def _human_items_for_prompt(record: dict[str, Any], fallback_items: dict[str, int]) -> list[dict[str, Any]]:
+def _human_items_for_prompt(record: dict[str, Any], fallback_items: set[str]) -> list[dict[str, Any]]:
     if isinstance(record.get("human_items"), list):
         return [
             {
                 "dimension": normalize_dimension(str(item.get("dimension", ""))),
-                "value": item.get("value"),
                 "evidences": item.get("evidences", []),
             }
             for item in record["human_items"]
@@ -86,10 +83,9 @@ def _human_items_for_prompt(record: dict[str, Any], fallback_items: dict[str, in
     return [
         {
             "dimension": normalize_dimension(dim),
-            "value": value,
             "evidences": record.get("human_spans", []),
         }
-        for dim, value in fallback_items.items()
+        for dim in fallback_items
     ]
 
 
@@ -127,84 +123,12 @@ def _agent_items_for_prompt(agent_items_raw: list[dict]) -> list[dict[str, Any]]
     return list(dims.values())
 
 
-def _counts_to_metrics(nums_both: int, nums_llm_only: int, nums_human_only: int) -> EvalMetrics:
-    return micro_from_counts(nums_both, nums_llm_only, nums_human_only)
-
-
-def _aggregate_semantic_metrics(
-    entries: list[dict[str, Any]],
-    all_alignments: dict[int, dict[str, str | None]],
-) -> dict[str, Any]:
-    per_text: list[dict[str, Any]] = []
-    total_llm_only = 0
-    total_human_only = 0
-    total_both = 0
-    for entry in entries:
-        text_id = entry["text_id"]
-        human_dims = {item["dimension"] for item in entry["human_items"]}
-        agent_dims = {item["dimension"] for item in entry["agent_items"]}
-        alignment = all_alignments.get(text_id, {})
-        both = {agent_dim for agent_dim, human_dim in alignment.items() if human_dim}
-        matched_human = {human_dim for human_dim in alignment.values() if human_dim}
-        llm_only = agent_dims - both
-        human_only = human_dims - matched_human
-
-        total_llm_only += len(llm_only)
-        total_human_only += len(human_only)
-        total_both += len(both)
-        metrics = _counts_to_metrics(len(both), len(llm_only), len(human_only))
-        per_text.append({
-            "text_id": text_id,
-            "human_items": sorted(human_dims),
-            "agent_items": sorted(agent_dims),
-            "both": sorted(both),
-            "llm_only": sorted(llm_only),
-            "human_only": sorted(human_only),
-            "nums_both": len(both),
-            "nums_llm_only": len(llm_only),
-            "nums_human_only": len(human_only),
-            **metrics.as_dict(),
-        })
-
-    n_texts = len(per_text)
-    macro = EvalMetrics(
-        consistency=sum(row["consistency"] for row in per_text) / n_texts if n_texts else 0.0,
-        precision=sum(row["precision"] for row in per_text) / n_texts if n_texts else 0.0,
-        recall=sum(row["recall"] for row in per_text) / n_texts if n_texts else 0.0,
-        n_human=total_both + total_human_only,
-        n_agent=total_both + total_llm_only,
-        n_intersection=total_both,
-        n_union=total_both + total_llm_only + total_human_only,
-    )
-    return {
-        "common_texts": len(entries),
-        "nums_llm_only": total_llm_only,
-        "nums_human_only": total_human_only,
-        "nums_both": total_both,
-        "macro": macro.as_dict(),
-        "micro": micro_from_counts(total_both, total_llm_only, total_human_only).as_dict(),
-        "per_text": per_text,
-        "alignment": {
-            text_id: all_alignments.get(text_id, {})
-            for text_id in (e["text_id"] for e in entries)
-        },
-    }
-
-
-def _human_from_react_action(action: str, human_dims: set[str]) -> str | None:
-    action = action.strip()
-    if not action.upper().startswith("MATCH"):
-        return None
-    candidate = normalize_dimension(action[5:].strip().strip("<>").strip())
-    return candidate if candidate in human_dims else None
-
-
 async def abuild_semantic_alignment_for_texts(
     text_batch: list[dict[str, Any]],
     llm: BaseChatModel,
     *,
     language: str | None = None,
-) -> dict[int, dict[str, str | None]]:
+) -> dict[int, dict[str, list[str] | None]]:
     if not text_batch:
         return {}
     prompt_rows = []
@@ -230,28 +154,23 @@ async def abuild_semantic_alignment_for_texts(
         return {}
 
     expected = {str(entry["text_id"]): entry for entry in text_batch}
-    validated: dict[int, dict[str, str | None]] = {}
+    validated: dict[int, dict[str, list[str] | None]] = {}
     for text in result.texts:
         if text.text_id not in expected:
             continue
         entry = expected[text.text_id]
         agent_dims = {item["dimension"] for item in entry["agent_items"]}
         human_dims = {item["dimension"] for item in entry["human_items"]}
-        matches: dict[str, str | None] = {}
+        matches: dict[str, list[str] | None] = {}
         for match in text.matches:
             agent_dim = normalize_dimension(match.agent_dimension)
-            human_dim = (
-                normalize_dimension(match.matched_human_dimension or "")
-                if match.matched_human_dimension
-                else None
-            )
-            if not human_dim and match.action:
-                human_dim = _human_from_react_action(match.action, human_dims)
             if agent_dim not in agent_dims:
                 continue
-            if human_dim not in human_dims:
-                human_dim = None
-            matches[agent_dim] = human_dim
+            human_set = {
+                normalize_dimension(h) for h in match.matched_human_dimensions
+                if normalize_dimension(h) in human_dims
+            }
+            matches[agent_dim] = sorted(human_set) if human_set else None
         validated[int(text.text_id)] = matches
     return validated
 
@@ -261,7 +180,7 @@ def build_semantic_alignment_for_texts(
     llm: BaseChatModel,
     *,
     language: str | None = None,
-) -> dict[int, dict[str, str | None]]:
+) -> dict[int, dict[str, list[str] | None]]:
     return run_async(
         abuild_semantic_alignment_for_texts(text_batch, llm, language=language)
     )

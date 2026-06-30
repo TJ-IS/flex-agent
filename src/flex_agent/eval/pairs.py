@@ -18,7 +18,7 @@ from flex_agent.workspace import Workspace
 class EvalPair:
     text_id: int
     content: str
-    human_items: dict[str, int]
+    human_items: set[str]
     human_record: dict[str, Any]
     agent_items_raw: list[dict[str, Any]]
 
