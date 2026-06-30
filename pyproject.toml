@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.scripts]
-flex-agent = "flex_agent.cli:main"
+agent = "flex_agent.cli:main"
 
 [build-system]
 requires = ["hatchling"]

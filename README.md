@@ -2,7 +2,7 @@
 
 CODE is a Deep Agents based construct-development harness. The implementation uses
 OpenCoding, Inducing, and AxialCoding roles over a persistent workspace while keeping
-the historical `flex-agent` command as the local entrypoint.
+`agent` as the local entrypoint.
 
 ## Quick start
 
@@ -10,17 +10,15 @@ the historical `flex-agent` command as the local entrypoint.
 cd flex-agent
 uv sync
 cp env.example .env
-uv run flex-agent
+uv run agent
 ```
 
 Switch language, prompt set, or workspace category:
 
 ```bash
-uv run flex-agent --language en
-uv run flex-agent --prompts-dir baseline
-uv run flex-agent --workspace exp-v2
-uv run flex-agent --prompts-dir exp-v2 --workspace exp-v2
-uv run flex-agent --debug
+uv run agent --language en
+uv run agent --prompts-dir baseline
+uv run agent --workspace exp-v2
+uv run agent --prompts-dir exp-v2 --workspace exp-v2
+uv run agent --debug
 ```
-
-`--debug` writes graph and tool-call diagnostics to `.cursor/flex-agent-debug-<timestamp>.ndjson`.
