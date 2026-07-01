@@ -31,7 +31,6 @@ from flex_agent.workspace import Workspace
 
 from web.backend.env_runtime import (
     apply_workspace_env,
-    clear_llm_cache,
     infer_prompt_set,
     load_env_json,
     restore_env,
@@ -100,8 +99,9 @@ def _read_corpus_preview(path: Path, *, limit: int = 50) -> list[dict[str, Any]]
     return preview
 
 
-agent_turn_lock = asyncio.Lock()
+agent_turn_lock = None  # Deprecated: per-session `AgentRuntime.turn_lock` is used instead.
 _runtime_build_lock = threading.Lock()
+env_lock = asyncio.Lock()  # Serializes os.environ mutations for BYOK eval across sessions.
 
 
 def _generate_session_id() -> str:
@@ -220,6 +220,7 @@ class AgentRuntime:
     active_turn: asyncio.Task | None = field(default=None, repr=False)
     interrupt_event: asyncio.Event | None = field(default=None, repr=False)
     progress_relay: ProgressRelay = field(default_factory=ProgressRelay, repr=False)
+    turn_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
 
 
 @dataclass
@@ -489,7 +490,6 @@ class SessionManager:
         with _runtime_build_lock:
             snapshot = apply_workspace_env(env_json)
             try:
-                clear_llm_cache()
                 self.activate_session_globals_for(language, prompts_dir, workspace)
                 tool_ctx = create_coding_tool_context(
                     workspace,

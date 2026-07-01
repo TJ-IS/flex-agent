@@ -116,3 +116,8 @@ export interface TerminalLine {
   todos?: TodoItem[];
   planTitle?: string;
 }
+
+export interface PresenceStats {
+  online_sessions: number;
+  online_connections: number;
+}

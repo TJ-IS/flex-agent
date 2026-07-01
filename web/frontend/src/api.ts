@@ -2,6 +2,7 @@ import type {
   CreateSessionParams,
   SessionDetail,
   ServerEvent,
+  PresenceStats,
 } from "./types";
 
 const API_BASE = "";
@@ -184,4 +185,32 @@ export function sendInterrupt(ws: WebSocket): void {
 
 export function languageForPromptSet(promptSet: CreateSessionParams["prompt_set"]): "zh" | "en" {
   return promptSet === "baseline_en" ? "en" : "zh";
+}
+
+export async function getPresence(): Promise<PresenceStats> {
+  return request<PresenceStats>("/api/presence");
+}
+
+export function createPresenceWebSocket(
+  onStats: (stats: PresenceStats) => void,
+): WebSocket {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const ws = new WebSocket(`${protocol}//${window.location.host}/api/presence/stream`);
+  ws.onmessage = (message) => {
+    try {
+      const parsed = JSON.parse(message.data) as PresenceStats & { type?: string };
+      if (
+        typeof parsed.online_sessions === "number" &&
+        typeof parsed.online_connections === "number"
+      ) {
+        onStats({
+          online_sessions: parsed.online_sessions,
+          online_connections: parsed.online_connections,
+        });
+      }
+    } catch {
+      // ignore malformed payloads
+    }
+  };
+  return ws;
 }

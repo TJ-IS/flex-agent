@@ -27,13 +27,14 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import GitHubIcon from "@mui/icons-material/GitHub";
 import { createSession, getSession, languageForPromptSet } from "../api";
 import { cardSx, sectionAccentSx, terminalColors } from "../theme";
-import type { EnvMode, PromptSet, SessionDetail, SessionSummary } from "../types";
+import type { EnvMode, PresenceStats, PromptSet, SessionDetail, SessionSummary } from "../types";
 
 const GITHUB_URL = "https://github.com/TJ-IS/flex-agent";
 
 interface EntryScreenProps {
   loading: boolean;
   recentSessions: SessionSummary[];
+  presence: PresenceStats;
   onOpen: (sessionId: string) => void;
   onCreated: (session: SessionDetail) => void;
 }
@@ -53,6 +54,7 @@ const sectionTitleSx = {
 export function EntryScreen({
   loading,
   recentSessions,
+  presence,
   onOpen,
   onCreated,
 }: EntryScreenProps) {
@@ -173,6 +175,27 @@ export function EntryScreen({
                 <GitHubIcon />
               </IconButton>
             </Tooltip>
+          </Stack>
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="center"
+            gap={1}
+            sx={{ pb: 0.5 }}
+          >
+            <Chip
+              size="small"
+              variant="outlined"
+              label={`在线 ${presence.online_sessions} 个会话 · ${presence.online_connections} 个连接`}
+              sx={{
+                color: terminalColors.green,
+                borderColor: "rgba(63, 185, 80, 0.45)",
+                bgcolor: "rgba(63, 185, 80, 0.06)",
+                fontSize: 12,
+                height: 22,
+                "& .MuiChip-label": { px: 1 },
+              }}
+            />
           </Stack>
         </Box>
 

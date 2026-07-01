@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextvars
 import os
 import sys
 from dataclasses import dataclass
@@ -31,8 +32,12 @@ REQUIRED_PROMPT_FILES = tuple(
     for requirement in REQUIRED_PROMPT_FILE_GROUPS
 )
 
-_active_prompts_dir: Path = DEFAULT_PROMPTS_DIR
-_active_workspace_dir: Path = DEFAULT_WORKSPACE
+_active_prompts_dir: contextvars.ContextVar[Path] = contextvars.ContextVar(
+    "flex_agent_prompts_dir", default=DEFAULT_PROMPTS_DIR
+)
+_active_workspace_dir: contextvars.ContextVar[Path] = contextvars.ContextVar(
+    "flex_agent_workspace_dir", default=DEFAULT_WORKSPACE
+)
 
 
 def path_label(path: Path, *, root: Path = PROJECT_ROOT) -> str:
@@ -93,23 +98,23 @@ def resolve_workspace_dir(spec: str | Path = "baseline") -> Path:
 
 
 def set_prompts_dir(spec: str | Path | None, *, language: Language | str | None = None) -> Path:
-    global _active_prompts_dir
-    _active_prompts_dir = resolve_prompts_dir(spec, language=language)
-    return _active_prompts_dir
+    resolved = resolve_prompts_dir(spec, language=language)
+    _active_prompts_dir.set(resolved)
+    return resolved
 
 
 def get_prompts_dir() -> Path:
-    return _active_prompts_dir
+    return _active_prompts_dir.get()
 
 
 def set_workspace_dir(spec: str | Path) -> Path:
-    global _active_workspace_dir
-    _active_workspace_dir = resolve_workspace_dir(spec)
-    return _active_workspace_dir
+    resolved = resolve_workspace_dir(spec)
+    _active_workspace_dir.set(resolved)
+    return resolved
 
 
 def get_workspace_dir() -> Path:
-    return _active_workspace_dir
+    return _active_workspace_dir.get()
 
 
 def load_env_file(path: Path | None = None) -> None:
@@ -219,15 +224,15 @@ def load_model_config(
     )
 
 
-@lru_cache(maxsize=16)
+@lru_cache(maxsize=32)
 def _build_llm_cached(
     model_name: str,
     timeout: float,
     max_retries: int,
     seed: int | None,
     base_url: str | None,
+    api_key: str,
 ) -> ChatOpenAI:
-    api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not set.")
 
@@ -254,30 +259,33 @@ def build_llm(
     timeout: float = 300.0,
     max_retries: int = 5,
     seed: int | None = None,
+    api_key: str | None = None,
+    base_url: str | None = None,
 ) -> ChatOpenAI:
     if seed is None:
         seed_raw = os.getenv("OPENAI_SEED", "42").strip()
         seed = int(seed_raw) if seed_raw else None
-    base_url = os.getenv("OPENAI_BASE_URL") or None
-    if base_url:
-        base_url = base_url.strip()
+    resolved_api_key = api_key if api_key is not None else (os.getenv("OPENAI_API_KEY") or "")
+    resolved_base_url = base_url if base_url is not None else (os.getenv("OPENAI_BASE_URL") or None)
+    if resolved_base_url:
+        resolved_base_url = resolved_base_url.strip()
         # Automatically append '/v1' to OPENAI_BASE_URL if it's a custom proxy/endpoint
         # and doesn't end with '/v1' (ignoring trailing slashes).
         # This prevents the common 'AttributeError: str object has no attribute model_dump'
         # error caused by proxies returning HTML error/welcome pages (strings) instead of JSON.
-        normalized = base_url.rstrip("/")
+        normalized = resolved_base_url.rstrip("/")
         if normalized and not normalized.endswith("/v1") and not normalized.endswith("/v1/"):
             # Check if it's a standard web URL (http/https)
             if normalized.startswith("http://") or normalized.startswith("https://"):
-                old_base_url = base_url
-                base_url = f"{normalized}/v1"
+                old_base_url = resolved_base_url
+                resolved_base_url = f"{normalized}/v1"
                 print(
                     f"⚠️  [Warning] OPENAI_BASE_URL '{old_base_url}' does not end with '/v1'. "
-                    f"Automatically appended '/v1' -> '{base_url}' to prevent LangChain parsing errors.",
+                    f"Automatically appended '/v1' -> '{resolved_base_url}' to prevent LangChain parsing errors.",
                     file=sys.stderr,
                     flush=True,
                 )
-    return _build_llm_cached(model_name, timeout, max_retries, seed, base_url)
+    return _build_llm_cached(model_name, timeout, max_retries, seed, resolved_base_url, resolved_api_key)
 
 
 def trace_invoke_config(component: str | None = None) -> dict[str, object]:

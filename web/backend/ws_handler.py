@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
 from typing import Any, Awaitable, Callable
 
@@ -12,6 +13,7 @@ from flex_agent.i18n import get_bundle
 from flex_agent.ui.events import StepStatus, StreamEventParser, TimelineEntry, UIUpdate
 from flex_agent.ui.helpers import handle_slash_command
 
+from web.backend.env_runtime import apply_workspace_env, load_env_json, restore_env
 from web.backend.events_serializer import (
     serialize_banner_event,
     serialize_error_message,
@@ -21,7 +23,7 @@ from web.backend.events_serializer import (
     serialize_user_echo,
     workspace_summary,
 )
-from web.backend.session_manager import AgentRuntime, agent_turn_lock, session_manager
+from web.backend.session_manager import AgentRuntime, env_lock, session_manager
 
 SendFn = Callable[[dict[str, Any]], Awaitable[None]]
 
@@ -114,7 +116,7 @@ async def handle_user_message(
 
     runtime.parser.note_user_message(cleaned, emit=False)
 
-    async with agent_turn_lock:
+    async with runtime.turn_lock:
         session_manager.activate_session_globals(runtime)
         await _stream_agent_turn(runtime, cleaned, send)
 
@@ -141,16 +143,42 @@ async def _run_eval_slash_command(
     )
 
     try:
-        async with agent_turn_lock:
+        async with runtime.turn_lock:
             session_manager.activate_session_globals(runtime)
-            _handled, output = await loop.run_in_executor(
-                None,
-                lambda: handle_slash_command(
-                    runtime.workspace,
-                    command,
-                    on_progress=runtime.progress_relay.emit,
-                ),
-            )
+            ctx = contextvars.copy_context()
+            if runtime.env_mode == "byok":
+                # BYOK eval rebuilds LLMs from os.environ; apply this session's
+                # overrides under a cross-session env_lock so concurrent BYOK
+                # evals don't clobber each other's env. Env-mode evals and agent
+                # turns (which use closure-cached LLMs) are unaffected and stay
+                # fully parallel.
+                env_json = load_env_json(runtime.workspace)
+                async with env_lock:
+                    snapshot = apply_workspace_env(env_json)
+                    try:
+                        _handled, output = await loop.run_in_executor(
+                            None,
+                            lambda: ctx.run(
+                                lambda: handle_slash_command(
+                                    runtime.workspace,
+                                    command,
+                                    on_progress=runtime.progress_relay.emit,
+                                )
+                            ),
+                        )
+                    finally:
+                        restore_env(snapshot)
+            else:
+                _handled, output = await loop.run_in_executor(
+                    None,
+                    lambda: ctx.run(
+                        lambda: handle_slash_command(
+                            runtime.workspace,
+                            command,
+                            on_progress=runtime.progress_relay.emit,
+                        )
+                    ),
+                )
     finally:
         runtime.progress_relay.unbind()
 
@@ -166,7 +194,7 @@ async def _emit_slash_output(
     if not output:
         return
     cmd = command.strip().lower().split()[0]
-    async with agent_turn_lock:
+    async with runtime.turn_lock:
         session_manager.activate_session_globals(runtime)
         if cmd == "/status":
             await send_workspace_status(runtime, send)

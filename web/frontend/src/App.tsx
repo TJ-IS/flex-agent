@@ -4,6 +4,7 @@ import { deleteSession, getSession } from "./api";
 import { EntryScreen } from "./components/EntryScreen";
 import { Sidebar, SidebarContent } from "./components/Sidebar";
 import { Terminal } from "./components/Terminal";
+import { usePresence } from "./hooks/usePresence";
 import {
   listLocalSessions,
   registerLocalSession,
@@ -21,6 +22,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [errorToast, setErrorToast] = useState<string | null>(null);
+  const presence = usePresence();
 
   const refreshSessions = useCallback(async () => {
     const localRecords = listLocalSessions();
@@ -154,6 +156,7 @@ export default function App() {
             sessionId={activeSessionId}
             envMode={activeSession?.env_mode ?? "env"}
             promptSet={activeSession?.prompt_set ?? "baseline"}
+            presence={presence}
             onExit={() => setActiveSessionId(null)}
             onOpenSidebar={!isDesktop ? () => setDrawerOpen(true) : undefined}
           />
@@ -161,6 +164,7 @@ export default function App() {
           <EntryScreen
             loading={loading}
             recentSessions={sessions}
+            presence={presence}
             onOpen={(sessionId) => void handleOpenSession(sessionId)}
             onCreated={(session) =>
               void handleOpenSession(session.id, {

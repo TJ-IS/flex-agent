@@ -16,6 +16,7 @@ import type {
   ActivityMode,
   EnvMode,
   I18nStrings,
+  PresenceStats,
   PromptSet,
   ServerEvent,
   StepRecord,
@@ -34,6 +35,7 @@ interface TerminalProps {
   sessionId: string;
   envMode: EnvMode;
   promptSet: PromptSet;
+  presence: PresenceStats;
   onExit: () => void;
   onOpenSidebar?: () => void;
 }
@@ -48,6 +50,7 @@ export function Terminal({
   sessionId,
   envMode,
   promptSet,
+  presence,
   onExit,
   onOpenSidebar,
 }: TerminalProps) {
@@ -382,6 +385,17 @@ export function Terminal({
                 }}
               />
             )}
+            <Chip
+              size="small"
+              variant="outlined"
+              label={`在线 ${presence.online_sessions}`}
+              sx={{
+                ...toolbarChipSx,
+                color: terminalColors.green,
+                borderColor: "rgba(63, 185, 80, 0.45)",
+                bgcolor: "rgba(63, 185, 80, 0.06)",
+              }}
+            />
           </Stack>
           <Stack direction="row" spacing={0.75}>
             <Button

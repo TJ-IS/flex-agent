@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextvars
 import os
 from dataclasses import dataclass
 from typing import Literal, Mapping
@@ -10,7 +11,9 @@ VALID_LANGUAGES: tuple[Language, ...] = ("zh", "en")
 DEFAULT_LANGUAGE: Language = "zh"
 LANGUAGE_ENV_VAR = "FLEX_AGENT_LANGUAGE"
 
-_active_language: Language = DEFAULT_LANGUAGE
+_active_language: contextvars.ContextVar[Language] = contextvars.ContextVar(
+    "flex_agent_language", default=DEFAULT_LANGUAGE
+)
 
 
 @dataclass(frozen=True)
@@ -803,13 +806,13 @@ def resolve_language(spec: str | None = None) -> Language:
 
 
 def set_language(spec: str | None = None) -> Language:
-    global _active_language
-    _active_language = resolve_language(spec)
-    return _active_language
+    resolved = resolve_language(spec)
+    _active_language.set(resolved)
+    return resolved
 
 
 def get_language() -> Language:
-    return _active_language
+    return _active_language.get()
 
 
 def get_bundle(language: str | None = None) -> TextBundle:

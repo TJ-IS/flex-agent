@@ -14,6 +14,7 @@ from flex_agent.config import PROJECT_ROOT, load_env_file, warn_langsmith_tracin
 from web.backend.checkpointer import close_checkpointer, init_checkpointer
 from web.backend.env_runtime import VALID_PROMPT_SETS
 from web.backend.file_validation import validate_jsonl
+from web.backend.presence import presence_manager
 from web.backend.session_manager import session_manager
 from web.backend.ws_handler import ws_message_loop
 
@@ -63,6 +64,23 @@ def create_app() -> FastAPI:
     @app.get("/api/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/api/presence")
+    async def get_presence() -> dict[str, int]:
+        return await presence_manager.stats()
+
+    @app.websocket("/api/presence/stream")
+    async def presence_stream(websocket: WebSocket) -> None:
+        await websocket.accept()
+        conn_id = await presence_manager.subscribe(websocket)
+        try:
+            # Keep the connection open; presence updates are pushed via broadcast.
+            while True:
+                await websocket.receive_text()
+        except WebSocketDisconnect:
+            pass
+        finally:
+            await presence_manager.unsubscribe(conn_id)
 
     @app.post("/api/sessions")
     def create_session(body: CreateSessionRequest) -> dict[str, Any]:
@@ -206,15 +224,18 @@ def create_app() -> FastAPI:
     @app.websocket("/api/sessions/{session_id}/stream")
     async def session_stream(websocket: WebSocket, session_id: str) -> None:
         await websocket.accept()
+        presence_conn_id = await presence_manager.register_session(session_id, websocket)
         try:
             runtime = session_manager.get_or_create_runtime(session_id)
         except FileNotFoundError as exc:
             await websocket.send_text(f'{{"type":"error","message":{repr(str(exc))}}}')
             await websocket.close(code=4404)
+            await presence_manager.unregister_session(session_id, presence_conn_id)
             return
         except ValueError as exc:
             await websocket.send_text(f'{{"type":"error","message":{repr(str(exc))}}}')
             await websocket.close(code=4400)
+            await presence_manager.unregister_session(session_id, presence_conn_id)
             return
 
         try:
@@ -226,6 +247,7 @@ def create_app() -> FastAPI:
                 runtime.interrupt_event.set()
             if runtime.active_turn and not runtime.active_turn.done():
                 runtime.active_turn.cancel()
+            await presence_manager.unregister_session(session_id, presence_conn_id)
 
     if FRONTEND_DIST.exists():
         app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")
