@@ -2,7 +2,9 @@ export type PromptSet =
   | "baseline"
   | "baseline_en"
   | "baseline_oneshot"
-  | "baseline_fewshot";
+  | "baseline_fewshot"
+  | "baseline_oneshot_en"
+  | "baseline_fewshot_en";
 
 export type EnvMode = "env" | "byok";
 

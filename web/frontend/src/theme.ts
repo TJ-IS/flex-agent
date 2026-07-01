@@ -16,6 +16,13 @@ export const terminalColors = {
 export const monoFont =
   '"JetBrains Mono", "Fira Code", "SF Mono", Menlo, Monaco, Consolas, monospace';
 
+export const fontSizes = {
+  xs: "0.7rem", // 11.2px — chips, slash commands, tiny meta
+  sm: "0.75rem", // 12px — toolbar chips/buttons, status labels, hints, streaming label, divider, secondary text
+  md: "0.875rem", // 14px — conversation body, editor textarea, form labels, primary session text, tab labels
+  lg: "1rem", // 16px — section / card titles
+} as const;
+
 export const sectionAccentSx = {
   borderLeft: `3px solid ${terminalColors.cyan}`,
   pl: 1.5,
@@ -38,7 +45,7 @@ const TOOLBAR_HEIGHT = 28;
 /** 顶栏 / 工具条 Chip 统一样式 */
 export const toolbarChipSx = {
   height: TOOLBAR_HEIGHT,
-  fontSize: "0.72rem",
+  fontSize: fontSizes.sm,
   borderRadius: 1,
   border: `1px solid ${terminalColors.border}`,
   bgcolor: "rgba(255,255,255,0.04)",
@@ -50,7 +57,7 @@ export const toolbarChipSx = {
 export const toolbarButtonSx = {
   height: TOOLBAR_HEIGHT,
   minHeight: TOOLBAR_HEIGHT,
-  fontSize: "0.72rem",
+  fontSize: fontSizes.sm,
   px: 1.25,
   py: 0,
   lineHeight: 1,

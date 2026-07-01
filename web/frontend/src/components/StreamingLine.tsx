@@ -1,5 +1,6 @@
 import { Box, Typography } from "@mui/material";
-import { terminalColors } from "../theme";
+import { useI18n } from "../i18n/LanguageContext";
+import { fontSizes, terminalColors } from "../theme";
 
 const FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
 
@@ -16,7 +17,8 @@ export function StreamingLine({
   activityLabels,
   frameIndex,
 }: StreamingLineProps) {
-  const label = activityLabels[activityMode] ?? activityLabels.thinking ?? "running";
+  const { t } = useI18n();
+  const label = activityLabels[activityMode] ?? activityLabels.thinking ?? t("stream.running");
   const frame = FRAMES[frameIndex % FRAMES.length];
 
   return (
@@ -24,7 +26,7 @@ export function StreamingLine({
       <Typography
         sx={{
           color: terminalColors.gray,
-          fontSize: "0.75rem",
+          fontSize: fontSizes.sm,
           mb: 0.5,
           display: "flex",
           alignItems: "center",
@@ -45,6 +47,7 @@ export function StreamingLine({
             wordBreak: "break-word",
             pl: 1,
             borderLeft: `2px solid ${terminalColors.cyan}`,
+            fontSize: fontSizes.md,
           }}
         >
           {text}

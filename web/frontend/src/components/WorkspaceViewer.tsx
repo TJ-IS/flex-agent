@@ -34,7 +34,8 @@ import {
   type DimensionItem,
   type WorkspaceOverview,
 } from "../api";
-import { cardSx, monoFont, terminalColors } from "../theme";
+import { useI18n } from "../i18n/LanguageContext";
+import { cardSx, fontSizes, monoFont, terminalColors } from "../theme";
 
 interface WorkspaceViewerProps {
   sessionId: string;
@@ -42,7 +43,13 @@ interface WorkspaceViewerProps {
   onClose: () => void;
 }
 
-const TABS = ["概览", "代码本", "编码结果", "语料预览", "评测"] as const;
+const TAB_KEYS = [
+  "viewer.tabOverview",
+  "viewer.tabCodebook",
+  "viewer.tabCoding",
+  "viewer.tabCorpus",
+  "viewer.tabEval",
+] as const;
 
 function statNumber(value: unknown): string {
   if (typeof value === "number") return String(value);
@@ -68,7 +75,7 @@ function uniqueLabels(items: CodingResult["items"]): string[] {
 }
 
 interface EvalMetrics {
-  label: string;
+  labelKey: "viewer.metricKeyword" | "viewer.metricSemantic";
   consistency?: number;
   precision?: number;
   recall?: number;
@@ -80,13 +87,13 @@ interface EvalMetrics {
 function extractEvalMetrics(payload: Record<string, unknown> | null): EvalMetrics[] {
   if (!payload) return [];
   const sections: EvalMetrics[] = [];
-  const labels: Record<string, string> = {
-    item_level_keyword: "关键词匹配",
-    item_level_semantic: "语义对齐",
-    keyword: "关键词匹配",
-    semantic: "语义对齐",
+  const keys: Record<string, EvalMetrics["labelKey"]> = {
+    item_level_keyword: "viewer.metricKeyword",
+    item_level_semantic: "viewer.metricSemantic",
+    keyword: "viewer.metricKeyword",
+    semantic: "viewer.metricSemantic",
   };
-  for (const key of Object.keys(labels)) {
+  for (const key of Object.keys(keys)) {
     const section = payload[key];
     if (!section || typeof section !== "object") continue;
     const obj = section as Record<string, unknown>;
@@ -110,7 +117,7 @@ function extractEvalMetrics(payload: Record<string, unknown> | null): EvalMetric
     ) {
       continue;
     }
-    sections.push({ label: labels[key], consistency, precision, recall, both, llmOnly, humanOnly });
+    sections.push({ labelKey: keys[key], consistency, precision, recall, both, llmOnly, humanOnly });
   }
   return sections;
 }
@@ -130,7 +137,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
         >
           {value}
         </Typography>
-        <Typography sx={{ fontSize: "0.72rem", color: terminalColors.gray, mt: 0.5 }}>
+        <Typography sx={{ fontSize: fontSizes.sm, color: terminalColors.gray, mt: 0.5 }}>
           {label}
         </Typography>
       </CardContent>
@@ -139,47 +146,48 @@ function StatCard({ label, value }: { label: string; value: string }) {
 }
 
 function OverviewTab({ data }: { data: WorkspaceOverview }) {
+  const { t } = useI18n();
   const status = data.status;
   const partition = data.partition;
 
   return (
     <Stack spacing={2}>
       <Stack direction="row" flexWrap="wrap" useFlexGap gap={1.5}>
-        <StatCard label="语料总数" value={statNumber(status.texts_total)} />
-        <StatCard label="已编码" value={statNumber(status.coded_count)} />
-        <StatCard label="队列剩余" value={statNumber(status.queue_remaining)} />
-        <StatCard label="维度数" value={statNumber(status.dimensions_count)} />
-        <StatCard label="Open 评测" value={statNumber(status.eval_open_count)} />
-        <StatCard label="Axial 评测" value={statNumber(status.eval_axial_count)} />
+        <StatCard label={t("viewer.statTotal")} value={statNumber(status.texts_total)} />
+        <StatCard label={t("viewer.statCoded")} value={statNumber(status.coded_count)} />
+        <StatCard label={t("viewer.statQueue")} value={statNumber(status.queue_remaining)} />
+        <StatCard label={t("viewer.statDimensions")} value={statNumber(status.dimensions_count)} />
+        <StatCard label={t("viewer.statEvalOpen")} value={statNumber(status.eval_open_count)} />
+        <StatCard label={t("viewer.statEvalAxial")} value={statNumber(status.eval_axial_count)} />
       </Stack>
 
       {partition && (
         <Box>
           <Typography variant="caption" sx={{ color: terminalColors.gray, display: "block", mb: 1 }}>
-            数据划分
+            {t("viewer.partition")}
           </Typography>
           <Stack spacing={1}>
             <Stack direction="row" alignItems="center" flexWrap="wrap" useFlexGap gap={0.5}>
-              <Typography sx={{ fontSize: "0.75rem", color: terminalColors.gray, minWidth: 72 }}>
+              <Typography sx={{ fontSize: fontSizes.sm, color: terminalColors.gray, minWidth: 72 }}>
                 Seed pool
               </Typography>
               {partition.codebook_text_ids.length === 0 ? (
-                <Typography sx={{ fontSize: "0.75rem", color: terminalColors.gray }}>—</Typography>
+                <Typography sx={{ fontSize: fontSizes.sm, color: terminalColors.gray }}>—</Typography>
               ) : (
                 partition.codebook_text_ids.map((id) => (
-                  <Chip key={`seed-${id}`} size="small" label={id} sx={{ height: 20, fontSize: "0.65rem" }} />
+                  <Chip key={`seed-${id}`} size="small" label={id} sx={{ height: 20, fontSize: fontSizes.xs }} />
                 ))
               )}
             </Stack>
             <Stack direction="row" alignItems="center" flexWrap="wrap" useFlexGap gap={0.5}>
-              <Typography sx={{ fontSize: "0.75rem", color: terminalColors.gray, minWidth: 72 }}>
+              <Typography sx={{ fontSize: fontSizes.sm, color: terminalColors.gray, minWidth: 72 }}>
                 Update pool
               </Typography>
               {partition.kevin_text_ids.length === 0 ? (
-                <Typography sx={{ fontSize: "0.75rem", color: terminalColors.gray }}>—</Typography>
+                <Typography sx={{ fontSize: fontSizes.sm, color: terminalColors.gray }}>—</Typography>
               ) : (
                 partition.kevin_text_ids.map((id) => (
-                  <Chip key={`update-${id}`} size="small" label={id} sx={{ height: 20, fontSize: "0.65rem" }} />
+                  <Chip key={`update-${id}`} size="small" label={id} sx={{ height: 20, fontSize: fontSizes.xs }} />
                 ))
               )}
             </Stack>
@@ -190,7 +198,7 @@ function OverviewTab({ data }: { data: WorkspaceOverview }) {
       {data.quality_warnings && Object.keys(data.quality_warnings).length > 0 && (
         <Box>
           <Typography variant="caption" sx={{ color: terminalColors.gray, display: "block", mb: 1 }}>
-            质量告警
+            {t("viewer.qualityWarnings")}
           </Typography>
           <Stack direction="row" flexWrap="wrap" useFlexGap gap={0.5}>
             {Object.entries(data.quality_warnings).map(([key, val]) => {
@@ -202,7 +210,7 @@ function OverviewTab({ data }: { data: WorkspaceOverview }) {
                   label={`${key}: ${String(val)}`}
                   color="warning"
                   variant="outlined"
-                  sx={{ height: 22, fontSize: "0.68rem" }}
+                  sx={{ height: 22, fontSize: fontSizes.xs }}
                 />
               );
             })}
@@ -213,7 +221,7 @@ function OverviewTab({ data }: { data: WorkspaceOverview }) {
                 <ListItem key={idx} disablePadding sx={{ py: 0.25 }}>
                   <ListItemText
                     primary={note}
-                    primaryTypographyProps={{ fontSize: "0.72rem", color: terminalColors.yellow }}
+                    primaryTypographyProps={{ fontSize: fontSizes.sm, color: terminalColors.yellow }}
                   />
                 </ListItem>
               ))}
@@ -226,10 +234,11 @@ function OverviewTab({ data }: { data: WorkspaceOverview }) {
 }
 
 function CodebookTab({ dimensions }: { dimensions: DimensionItem[] }) {
+  const { t } = useI18n();
   if (dimensions.length === 0) {
     return (
       <Alert severity="info" variant="outlined">
-        尚未生成代码本。运行概念归纳（Construct Induction）后将在此展示维度。
+        {t("viewer.codebookEmpty")}
       </Alert>
     );
   }
@@ -239,11 +248,11 @@ function CodebookTab({ dimensions }: { dimensions: DimensionItem[] }) {
       {dimensions.map((dim) => (
         <Card key={dim.name} sx={cardSx}>
           <CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
-            <Typography sx={{ fontWeight: 600, fontSize: "0.95rem", mb: 0.5 }}>
+            <Typography sx={{ fontWeight: 600, fontSize: fontSizes.lg, mb: 0.5 }}>
               {dim.name}
             </Typography>
             {dim.definition && (
-              <Typography sx={{ fontSize: "0.78rem", color: terminalColors.gray, mb: 1 }}>
+              <Typography sx={{ fontSize: fontSizes.md, color: terminalColors.gray, mb: 1 }}>
                 {dim.definition}
               </Typography>
             )}
@@ -255,7 +264,7 @@ function CodebookTab({ dimensions }: { dimensions: DimensionItem[] }) {
                   label={item}
                   sx={{
                     height: 22,
-                    fontSize: "0.72rem",
+                    fontSize: fontSizes.sm,
                     bgcolor: "rgba(57, 197, 207, 0.1)",
                     borderColor: "rgba(57, 197, 207, 0.35)",
                   }}
@@ -271,10 +280,11 @@ function CodebookTab({ dimensions }: { dimensions: DimensionItem[] }) {
 }
 
 function CodingTab({ coding }: { coding: CodingResult[] }) {
+  const { t } = useI18n();
   if (coding.length === 0) {
     return (
       <Alert severity="info" variant="outlined">
-        尚无编码结果。运行开放式编码（Open Coding）后将在此展示。
+        {t("viewer.codingEmpty")}
       </Alert>
     );
   }
@@ -312,11 +322,11 @@ function CodingTab({ coding }: { coding: CodingResult[] }) {
                 <Chip
                   size="small"
                   label={`#${entry.id}`}
-                  sx={{ height: 20, fontSize: "0.68rem", fontFamily: monoFont, flexShrink: 0 }}
+                  sx={{ height: 20, fontSize: fontSizes.xs, fontFamily: monoFont, flexShrink: 0 }}
                 />
                 <Typography
                   sx={{
-                    fontSize: "0.78rem",
+                    fontSize: fontSizes.md,
                     color: terminalColors.text,
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -329,15 +339,15 @@ function CodingTab({ coding }: { coding: CodingResult[] }) {
                 </Typography>
                 <Chip
                   size="small"
-                  label={`${entry.items.length} 标签`}
-                  sx={{ height: 20, fontSize: "0.65rem", flexShrink: 0 }}
+                  label={t("viewer.codingLabels", { count: entry.items.length })}
+                  sx={{ height: 20, fontSize: fontSizes.xs, flexShrink: 0 }}
                 />
               </Stack>
             </AccordionSummary>
             <AccordionDetails sx={{ pt: 0, overflow: "hidden" }}>
               <Typography
                 sx={{
-                  fontSize: "0.75rem",
+                  fontSize: fontSizes.sm,
                   color: terminalColors.gray,
                   mb: 1,
                   whiteSpace: "pre-wrap",
@@ -350,7 +360,7 @@ function CodingTab({ coding }: { coding: CodingResult[] }) {
               {labels.length > 0 && (
                 <Stack direction="row" flexWrap="wrap" useFlexGap gap={0.5} sx={{ mb: 1 }}>
                   {labels.map((label) => (
-                    <Chip key={label} size="small" label={label} variant="outlined" sx={{ height: 20, fontSize: "0.65rem" }} />
+                    <Chip key={label} size="small" label={label} variant="outlined" sx={{ height: 20, fontSize: fontSizes.xs }} />
                   ))}
                 </Stack>
               )}
@@ -358,18 +368,18 @@ function CodingTab({ coding }: { coding: CodingResult[] }) {
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ fontSize: "0.68rem", color: terminalColors.gray, py: 0.5 }}>标签</TableCell>
-                      <TableCell sx={{ fontSize: "0.68rem", color: terminalColors.gray, py: 0.5 }}>证据</TableCell>
-                      <TableCell sx={{ fontSize: "0.68rem", color: terminalColors.gray, py: 0.5 }}>维度</TableCell>
+                      <TableCell sx={{ fontSize: fontSizes.sm, color: terminalColors.gray, py: 0.5 }}>{t("viewer.colLabel")}</TableCell>
+                      <TableCell sx={{ fontSize: fontSizes.sm, color: terminalColors.gray, py: 0.5 }}>{t("viewer.colEvidence")}</TableCell>
+                      <TableCell sx={{ fontSize: fontSizes.sm, color: terminalColors.gray, py: 0.5 }}>{t("viewer.colDimension")}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {entry.items.map((item, idx) => (
                       <TableRow key={idx}>
-                        <TableCell sx={{ fontSize: "0.75rem", py: 0.5, wordBreak: "break-word" }}>{item.name}</TableCell>
+                        <TableCell sx={{ fontSize: fontSizes.md, py: 0.5, wordBreak: "break-word" }}>{item.name}</TableCell>
                         <TableCell
                           sx={{
-                            fontSize: "0.75rem",
+                            fontSize: fontSizes.md,
                             py: 0.5,
                             color: terminalColors.gray,
                             wordBreak: "break-word",
@@ -378,7 +388,7 @@ function CodingTab({ coding }: { coding: CodingResult[] }) {
                         >
                           {item.evidence ?? "—"}
                         </TableCell>
-                        <TableCell sx={{ fontSize: "0.75rem", py: 0.5, wordBreak: "break-word" }}>
+                        <TableCell sx={{ fontSize: fontSizes.md, py: 0.5, wordBreak: "break-word" }}>
                           {item.normalized_label ?? "—"}
                         </TableCell>
                       </TableRow>
@@ -395,18 +405,19 @@ function CodingTab({ coding }: { coding: CodingResult[] }) {
 }
 
 function CorpusTab({ preview, total }: { preview: WorkspaceOverview["corpus_preview"]; total: unknown }) {
+  const { t } = useI18n();
   if (preview.length === 0) {
     return (
       <Alert severity="info" variant="outlined">
-        语料文件为空或尚未加载。
+        {t("viewer.corpusEmpty")}
       </Alert>
     );
   }
 
   return (
     <Stack spacing={1}>
-      <Typography sx={{ fontSize: "0.75rem", color: terminalColors.gray }}>
-        共 {statNumber(total)} 条语料，预览前 {preview.length} 条
+      <Typography sx={{ fontSize: fontSizes.sm, color: terminalColors.gray }}>
+        {t("viewer.corpusCount", { total: statNumber(total), count: preview.length })}
       </Typography>
       <List dense disablePadding>
         {preview.map((item) => (
@@ -422,12 +433,12 @@ function CorpusTab({ preview, total }: { preview: WorkspaceOverview["corpus_prev
             <Chip
               size="small"
               label={item.id}
-              sx={{ height: 20, fontSize: "0.65rem", fontFamily: monoFont, mr: 1, mt: 0.25, flexShrink: 0 }}
+              sx={{ height: 20, fontSize: fontSizes.xs, fontFamily: monoFont, mr: 1, mt: 0.25, flexShrink: 0 }}
             />
             <ListItemText
               primary={item.text}
               primaryTypographyProps={{
-                fontSize: "0.78rem",
+                fontSize: fontSizes.md,
                 color: terminalColors.text,
                 sx: { whiteSpace: "pre-wrap", wordBreak: "break-word", overflowWrap: "anywhere" },
               }}
@@ -446,14 +457,15 @@ function EvalSection({
   title: string;
   payload: Record<string, unknown> | null;
 }) {
+  const { t } = useI18n();
   const metrics = extractEvalMetrics(payload);
 
   if (!payload) {
     return (
       <Box>
-        <Typography sx={{ fontWeight: 600, fontSize: "0.9rem", mb: 1 }}>{title}</Typography>
+        <Typography sx={{ fontWeight: 600, fontSize: fontSizes.lg, mb: 1 }}>{title}</Typography>
         <Alert severity="info" variant="outlined">
-          无评测数据。运行 /eval:open 或 /eval:axial 后将在此展示。
+          {t("viewer.evalEmpty")}
         </Alert>
       </Box>
     );
@@ -461,37 +473,37 @@ function EvalSection({
 
   return (
     <Box>
-      <Typography sx={{ fontWeight: 600, fontSize: "0.9rem", mb: 1 }}>{title}</Typography>
+      <Typography sx={{ fontWeight: 600, fontSize: fontSizes.lg, mb: 1 }}>{title}</Typography>
       <Stack direction="row" flexWrap="wrap" useFlexGap gap={0.5} sx={{ mb: 1.5 }}>
         {typeof payload.status === "string" && (
-          <Chip size="small" label={`状态: ${payload.status}`} sx={{ height: 22, fontSize: "0.68rem" }} />
+          <Chip size="small" label={t("viewer.evalStatus", { status: payload.status })} sx={{ height: 22, fontSize: fontSizes.xs }} />
         )}
         {typeof payload.mode === "string" && (
-          <Chip size="small" label={`模式: ${payload.mode}`} sx={{ height: 22, fontSize: "0.68rem" }} />
+          <Chip size="small" label={t("viewer.evalMode", { mode: payload.mode })} sx={{ height: 22, fontSize: fontSizes.xs }} />
         )}
         {typeof payload.coded_count === "number" && (
-          <Chip size="small" label={`已编码: ${payload.coded_count}`} sx={{ height: 22, fontSize: "0.68rem" }} />
+          <Chip size="small" label={t("viewer.evalCoded", { count: payload.coded_count })} sx={{ height: 22, fontSize: fontSizes.xs }} />
         )}
       </Stack>
       {metrics.length === 0 ? (
         <Alert severity="info" variant="outlined">
-          评测已完成，但暂无可展示的 macro 指标。
+          {t("viewer.evalNoMacro")}
         </Alert>
       ) : (
         <Stack spacing={1.5}>
           {metrics.map((m) => {
             const hasItems = (m.both && m.both.length > 0) || (m.llmOnly && m.llmOnly.length > 0) || (m.humanOnly && m.humanOnly.length > 0);
             return (
-              <Card key={m.label} sx={cardSx}>
+              <Card key={m.labelKey} sx={cardSx}>
                 <CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
-                  <Typography sx={{ fontSize: "0.82rem", fontWeight: 600, mb: 1 }}>{m.label}</Typography>
+                  <Typography sx={{ fontSize: fontSizes.md, fontWeight: 600, mb: 1 }}>{t(m.labelKey)}</Typography>
                   <Stack direction="row" flexWrap="wrap" useFlexGap gap={1.5} sx={{ mb: hasItems ? 1.5 : 0 }}>
                     {m.consistency !== undefined && (
                       <Box>
                         <Typography sx={{ fontSize: "1.1rem", fontWeight: 700, color: terminalColors.green, fontFamily: monoFont }}>
                           {(m.consistency * 100).toFixed(1)}%
                         </Typography>
-                        <Typography sx={{ fontSize: "0.68rem", color: terminalColors.gray }}>Consistency</Typography>
+                        <Typography sx={{ fontSize: fontSizes.sm, color: terminalColors.gray }}>Consistency</Typography>
                       </Box>
                     )}
                     {m.precision !== undefined && (
@@ -499,7 +511,7 @@ function EvalSection({
                         <Typography sx={{ fontSize: "1.1rem", fontWeight: 700, color: terminalColors.cyan, fontFamily: monoFont }}>
                           {(m.precision * 100).toFixed(1)}%
                         </Typography>
-                        <Typography sx={{ fontSize: "0.68rem", color: terminalColors.gray }}>Precision</Typography>
+                        <Typography sx={{ fontSize: fontSizes.sm, color: terminalColors.gray }}>Precision</Typography>
                       </Box>
                     )}
                     {m.recall !== undefined && (
@@ -507,7 +519,7 @@ function EvalSection({
                         <Typography sx={{ fontSize: "1.1rem", fontWeight: 700, color: terminalColors.magenta, fontFamily: monoFont }}>
                           {(m.recall * 100).toFixed(1)}%
                         </Typography>
-                        <Typography sx={{ fontSize: "0.68rem", color: terminalColors.gray }}>Recall</Typography>
+                        <Typography sx={{ fontSize: fontSizes.sm, color: terminalColors.gray }}>Recall</Typography>
                       </Box>
                     )}
                   </Stack>
@@ -515,8 +527,8 @@ function EvalSection({
                     <Stack spacing={1}>
                       {m.both && m.both.length > 0 && (
                         <Box>
-                          <Typography sx={{ fontSize: "0.68rem", color: terminalColors.gray, mb: 0.5 }}>
-                            共同匹配 ({m.both.length})
+                          <Typography sx={{ fontSize: fontSizes.sm, color: terminalColors.gray, mb: 0.5 }}>
+                            {t("viewer.matchBoth", { count: m.both.length })}
                           </Typography>
                           <Stack direction="row" flexWrap="wrap" useFlexGap gap={0.5}>
                             {m.both.map((item) => (
@@ -526,7 +538,7 @@ function EvalSection({
                                 label={item}
                                 sx={{
                                   height: 20,
-                                  fontSize: "0.65rem",
+                                  fontSize: fontSizes.xs,
                                   bgcolor: "rgba(63, 185, 80, 0.12)",
                                   borderColor: "rgba(63, 185, 80, 0.4)",
                                   color: terminalColors.green,
@@ -539,8 +551,8 @@ function EvalSection({
                       )}
                       {m.llmOnly && m.llmOnly.length > 0 && (
                         <Box>
-                          <Typography sx={{ fontSize: "0.68rem", color: terminalColors.gray, mb: 0.5 }}>
-                            仅 Agent ({m.llmOnly.length})
+                          <Typography sx={{ fontSize: fontSizes.sm, color: terminalColors.gray, mb: 0.5 }}>
+                            {t("viewer.matchAgentOnly", { count: m.llmOnly.length })}
                           </Typography>
                           <Stack direction="row" flexWrap="wrap" useFlexGap gap={0.5}>
                             {m.llmOnly.map((item) => (
@@ -550,7 +562,7 @@ function EvalSection({
                                 label={item}
                                 sx={{
                                   height: 20,
-                                  fontSize: "0.65rem",
+                                  fontSize: fontSizes.xs,
                                   bgcolor: "rgba(57, 197, 207, 0.1)",
                                   borderColor: "rgba(57, 197, 207, 0.35)",
                                   color: terminalColors.cyan,
@@ -563,8 +575,8 @@ function EvalSection({
                       )}
                       {m.humanOnly && m.humanOnly.length > 0 && (
                         <Box>
-                          <Typography sx={{ fontSize: "0.68rem", color: terminalColors.gray, mb: 0.5 }}>
-                            仅人工 ({m.humanOnly.length})
+                          <Typography sx={{ fontSize: fontSizes.sm, color: terminalColors.gray, mb: 0.5 }}>
+                            {t("viewer.matchHumanOnly", { count: m.humanOnly.length })}
                           </Typography>
                           <Stack direction="row" flexWrap="wrap" useFlexGap gap={0.5}>
                             {m.humanOnly.map((item) => (
@@ -574,7 +586,7 @@ function EvalSection({
                                 label={item}
                                 sx={{
                                   height: 20,
-                                  fontSize: "0.65rem",
+                                  fontSize: fontSizes.xs,
                                   bgcolor: "rgba(210, 153, 34, 0.1)",
                                   borderColor: "rgba(210, 153, 34, 0.4)",
                                   color: terminalColors.yellow,
@@ -598,15 +610,17 @@ function EvalSection({
 }
 
 function EvalTab({ data }: { data: WorkspaceOverview }) {
+  const { t } = useI18n();
   return (
     <Stack spacing={2} divider={<Divider sx={{ borderColor: terminalColors.border }} />}>
-      <EvalSection title="Open Coding 评测" payload={data.eval_open} />
-      <EvalSection title="Axial Coding 评测" payload={data.eval_axial} />
+      <EvalSection title={t("viewer.evalOpenTitle")} payload={data.eval_open} />
+      <EvalSection title={t("viewer.evalAxialTitle")} payload={data.eval_axial} />
     </Stack>
   );
 }
 
 export function WorkspaceViewer({ sessionId, open, onClose }: WorkspaceViewerProps) {
+  const { t } = useI18n();
   const [tabIndex, setTabIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -624,10 +638,10 @@ export function WorkspaceViewer({ sessionId, open, onClose }: WorkspaceViewerPro
     void getWorkspaceOverview(sessionId)
       .then(setData)
       .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : "加载失败");
+        setError(err instanceof Error ? err.message : t("viewer.loadFailed"));
       })
       .finally(() => setLoading(false));
-  }, [open, sessionId]);
+  }, [open, sessionId, t]);
 
   return (
     <Dialog
@@ -645,7 +659,7 @@ export function WorkspaceViewer({ sessionId, open, onClose }: WorkspaceViewerPro
         },
       }}
     >
-      <DialogTitle sx={{ pb: 1, flexShrink: 0 }}>查看 workspace</DialogTitle>
+      <DialogTitle sx={{ pb: 1, flexShrink: 0 }}>{t("viewer.title")}</DialogTitle>
       <DialogContent
         sx={{
           p: 0,
@@ -678,8 +692,8 @@ export function WorkspaceViewer({ sessionId, open, onClose }: WorkspaceViewerPro
               variant="scrollable"
               scrollButtons="auto"
             >
-              {TABS.map((label) => (
-                <Tab key={label} label={label} sx={{ fontSize: "0.8rem", minHeight: 40 }} />
+              {TAB_KEYS.map((key) => (
+                <Tab key={key} label={t(key)} sx={{ fontSize: fontSizes.md, minHeight: 40 }} />
               ))}
             </Tabs>
             <Box

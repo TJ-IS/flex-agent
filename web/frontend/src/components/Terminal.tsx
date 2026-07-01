@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Button, Chip, IconButton, Stack, Typography } from "@mui/material";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import MenuIcon from "@mui/icons-material/Menu";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import {
   createSessionWebSocket,
   sendInterrupt,
   sendMessage,
 } from "../api";
+import { useI18n } from "../i18n/LanguageContext";
 import {
   terminalColors,
   toolbarButtonSx,
@@ -54,6 +57,7 @@ export function Terminal({
   onExit,
   onOpenSidebar,
 }: TerminalProps) {
+  const { t } = useI18n();
   const [lines, setLines] = useState<TerminalLine[]>([]);
   const [steps, setSteps] = useState<Record<string, StepRecord>>({});
   const [todos, setTodos] = useState<TodoItem[]>([]);
@@ -300,9 +304,9 @@ export function Terminal({
   };
 
   const activityLabels = i18n?.activity_labels ?? {
-    thinking: "Agent 思考中",
-    tool: "执行工具",
-    streaming: "生成回复",
+    thinking: "thinking",
+    tool: "running tool",
+    streaming: "streaming",
   };
 
   return (
@@ -318,7 +322,7 @@ export function Terminal({
       <Box
         sx={{
           px: 2,
-          py: 1,
+          py: { xs: 0.75, sm: 1 },
           borderBottom: `1px solid ${terminalColors.border}`,
           bgcolor: terminalColors.panel,
         }}
@@ -342,7 +346,7 @@ export function Terminal({
               <IconButton
                 size="small"
                 onClick={onOpenSidebar}
-                aria-label="打开侧边栏"
+                aria-label={t("terminal.openSidebar")}
                 sx={toolbarIconButtonSx}
               >
                 <MenuIcon sx={{ fontSize: 16 }} />
@@ -351,7 +355,7 @@ export function Terminal({
             <Chip
               size="small"
               variant="outlined"
-              label={copied ? "已复制" : sessionId}
+              label={copied ? t("terminal.copied") : sessionId}
               onClick={() => void handleCopySessionId()}
               sx={{
                 ...toolbarChipSx,
@@ -370,13 +374,23 @@ export function Terminal({
                 },
               }}
             />
-            <Chip size="small" variant="outlined" label={envMode} sx={toolbarChipSx} />
-            <Chip size="small" variant="outlined" label={promptSet} sx={toolbarChipSx} />
+            <Chip
+              size="small"
+              variant="outlined"
+              label={envMode}
+              sx={{ ...toolbarChipSx, display: { xs: "none", sm: "inline-flex" } }}
+            />
+            <Chip
+              size="small"
+              variant="outlined"
+              label={promptSet}
+              sx={{ ...toolbarChipSx, display: { xs: "none", sm: "inline-flex" } }}
+            />
             {busy && (
               <Chip
                 size="small"
                 variant="outlined"
-                label="● 推理中"
+                label={t("terminal.reasoning")}
                 sx={{
                   ...toolbarChipSx,
                   color: terminalColors.yellow,
@@ -388,23 +402,42 @@ export function Terminal({
             <Chip
               size="small"
               variant="outlined"
-              label={`在线 ${presence.online_sessions}`}
+              label={t("terminal.onlineSessions", { sessions: presence.online_sessions })}
               sx={{
                 ...toolbarChipSx,
                 color: terminalColors.green,
                 borderColor: "rgba(63, 185, 80, 0.45)",
                 bgcolor: "rgba(63, 185, 80, 0.06)",
+                display: { xs: "none", sm: "inline-flex" },
               }}
             />
           </Stack>
-          <Stack direction="row" spacing={0.75}>
+          <Stack direction="row" spacing={0.75} sx={{ display: { xs: "flex", sm: "none" } }}>
+            <IconButton
+              size="small"
+              aria-label={t("terminal.view")}
+              onClick={() => setViewerOpen(true)}
+              sx={toolbarIconButtonSx}
+            >
+              <VisibilityOutlinedIcon sx={{ fontSize: 16 }} />
+            </IconButton>
+            <IconButton
+              size="small"
+              aria-label={t("terminal.edit")}
+              onClick={() => setEditorOpen(true)}
+              sx={toolbarIconButtonSx}
+            >
+              <EditOutlinedIcon sx={{ fontSize: 16 }} />
+            </IconButton>
+          </Stack>
+          <Stack direction="row" spacing={0.75} sx={{ display: { xs: "none", sm: "flex" } }}>
             <Button
               size="small"
               variant="outlined"
               onClick={() => setViewerOpen(true)}
               sx={toolbarButtonSx}
             >
-              查看
+              {t("terminal.view")}
             </Button>
             <Button
               size="small"
@@ -412,7 +445,7 @@ export function Terminal({
               onClick={() => setEditorOpen(true)}
               sx={toolbarButtonSx}
             >
-              编辑
+              {t("terminal.edit")}
             </Button>
           </Stack>
         </Stack>
@@ -461,7 +494,7 @@ export function Terminal({
 
         {!connected && (
           <Typography sx={{ color: terminalColors.yellow, mt: 1 }}>
-            连接中…
+            {t("terminal.connecting")}
           </Typography>
         )}
       </Box>
@@ -476,6 +509,7 @@ export function Terminal({
       />
       <WorkspaceEditor
         sessionId={sessionId}
+        envMode={envMode}
         open={editorOpen}
         onClose={() => setEditorOpen(false)}
       />

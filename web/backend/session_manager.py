@@ -30,7 +30,9 @@ from flex_agent.ui.events import StreamEventParser
 from flex_agent.workspace import Workspace
 
 from web.backend.env_runtime import (
+    ENV_KEYS,
     apply_workspace_env,
+    clear_llm_cache,
     infer_prompt_set,
     load_env_json,
     restore_env,
@@ -118,7 +120,7 @@ def _is_valid_session_id(session_id: str) -> bool:
 def _language_for_prompt_set(prompt_set: str, language: str | None = None) -> Language:
     if language in {"zh", "en"}:
         return language  # type: ignore[return-value]
-    return "en" if prompt_set == "baseline_en" else "zh"
+    return "en" if prompt_set.endswith("_en") else "zh"
 
 
 def _copy_prompt_set(workspace: Workspace, prompt_set: str) -> Path:
@@ -474,6 +476,33 @@ class SessionManager:
             raise FileNotFoundError("Workspace prompts directory not found.")
         path.write_text(content, encoding="utf-8")
         self.reset_runtime(session_id)
+
+    def get_env(self, session_id: str) -> dict[str, Any]:
+        workspace = self.get_workspace(session_id)
+        env_json = load_env_json(workspace)
+        return {
+            "mode": env_json.get("mode", "env"),
+            "overrides": env_json.get("overrides", {}),
+        }
+
+    def save_env(self, session_id: str, overrides: dict[str, str]) -> dict[str, Any]:
+        workspace = self.get_workspace(session_id)
+        env_json = load_env_json(workspace)
+        if env_json.get("mode") != "byok":
+            raise ValueError("Session is not in BYOK mode.")
+        incoming = {
+            k: str(v).strip()
+            for k, v in overrides.items()
+            if k in ENV_KEYS and v and str(v).strip()
+        }
+        if not incoming.get("OPENAI_API_KEY"):
+            raise ValueError("OPENAI_API_KEY is required for BYOK mode.")
+        merged = {**(env_json.get("overrides") or {}), **incoming}
+        new_json = {"mode": "byok", "overrides": merged}
+        save_env_json(workspace, new_json)
+        clear_llm_cache()
+        self.reset_runtime(session_id)
+        return {"status": "ok", "mode": "byok", "overrides": merged}
 
     def _build_runtime(
         self,

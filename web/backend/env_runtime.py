@@ -18,7 +18,14 @@ ENV_KEYS = (
 )
 
 VALID_PROMPT_SETS = frozenset(
-    {"baseline", "baseline_en", "baseline_oneshot", "baseline_fewshot"}
+    {
+        "baseline",
+        "baseline_en",
+        "baseline_oneshot",
+        "baseline_fewshot",
+        "baseline_oneshot_en",
+        "baseline_fewshot_en",
+    }
 )
 
 DEFAULT_ENV_JSON: dict[str, Any] = {"mode": "env", "overrides": {}}

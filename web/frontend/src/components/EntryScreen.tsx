@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import {
   Box,
   Button,
@@ -9,8 +9,8 @@ import {
   FormControl,
   FormControlLabel,
   FormLabel,
-  Grid,
   IconButton,
+  InputAdornment,
   List,
   ListItemButton,
   ListItemText,
@@ -21,12 +21,18 @@ import {
   Stack,
   TextField,
   Tooltip,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import GitHubIcon from "@mui/icons-material/GitHub";
-import { createSession, getSession, languageForPromptSet } from "../api";
-import { cardSx, sectionAccentSx, terminalColors } from "../theme";
+import VisibilityOffOutlinedIcon from "@mui/icons-material/VisibilityOffOutlined";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
+import { createSession, getSession } from "../api";
+import { useI18n } from "../i18n/LanguageContext";
+import type { UiLang } from "../i18n";
+import { cardSx, fontSizes, sectionAccentSx, terminalColors } from "../theme";
 import type { EnvMode, PresenceStats, PromptSet, SessionDetail, SessionSummary } from "../types";
 
 const GITHUB_URL = "https://github.com/TJ-IS/flex-agent";
@@ -39,15 +45,18 @@ interface EntryScreenProps {
   onCreated: (session: SessionDetail) => void;
 }
 
-const PROMPT_OPTIONS: { value: PromptSet; label: string; hint: string }[] = [
-  { value: "baseline", label: "baseline", hint: "Chinese baseline prompt set" },
-  { value: "baseline_en", label: "baseline_en", hint: "English baseline prompt set" },
-  { value: "baseline_oneshot", label: "baseline_oneshot", hint: "Chinese baseline one-shot variant" },
-  { value: "baseline_fewshot", label: "baseline_fewshot", hint: "Chinese baseline few-shot variant" },
+const ALL_PROMPT_OPTIONS: { value: PromptSet; lang: UiLang; hintKey: string }[] = [
+  { value: "baseline", lang: "zh", hintKey: "entry.hints.baseline" },
+  { value: "baseline_oneshot", lang: "zh", hintKey: "entry.hints.baseline_oneshot" },
+  { value: "baseline_fewshot", lang: "zh", hintKey: "entry.hints.baseline_fewshot" },
+  { value: "baseline_en", lang: "en", hintKey: "entry.hints.baseline_en" },
+  { value: "baseline_oneshot_en", lang: "en", hintKey: "entry.hints.baseline_oneshot_en" },
+  { value: "baseline_fewshot_en", lang: "en", hintKey: "entry.hints.baseline_fewshot_en" },
 ];
 
 const sectionTitleSx = {
   fontWeight: 700,
+  fontSize: fontSizes.lg,
   ...sectionAccentSx,
 };
 
@@ -58,13 +67,18 @@ export function EntryScreen({
   onOpen,
   onCreated,
 }: EntryScreenProps) {
+  const { lang, setLang, t } = useI18n();
+
   const [openId, setOpenId] = useState("");
   const [openError, setOpenError] = useState<string | null>(null);
   const [openLoading, setOpenLoading] = useState(false);
 
   const [mode, setMode] = useState<EnvMode>("env");
+  const promptOptions = useMemo(
+    () => ALL_PROMPT_OPTIONS.filter((option) => option.lang === lang),
+    [lang],
+  );
   const [promptSet, setPromptSet] = useState<PromptSet>("baseline");
-  const [language, setLanguage] = useState<"zh" | "en">("zh");
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [model, setModel] = useState("");
@@ -73,13 +87,16 @@ export function EntryScreen({
   const [createLoading, setCreateLoading] = useState(false);
 
   useEffect(() => {
-    setLanguage(languageForPromptSet(promptSet));
-  }, [promptSet]);
+    setPromptSet((current) => {
+      if (promptOptions.some((option) => option.value === current)) return current;
+      return promptOptions[0]?.value ?? "baseline";
+    });
+  }, [promptOptions]);
 
   const handleOpen = async (sessionId?: string) => {
     const trimmed = (sessionId ?? openId).trim();
     if (!trimmed) {
-      setOpenError("请输入 session_id");
+      setOpenError(t("entry.openErrorEmpty"));
       return;
     }
     setOpenLoading(true);
@@ -88,7 +105,7 @@ export function EntryScreen({
       await getSession(trimmed);
       onOpen(trimmed);
     } catch (error) {
-      setOpenError(error instanceof Error ? error.message : "打开失败，请确认 session_id 是否正确");
+      setOpenError(error instanceof Error ? error.message : t("entry.openErrorFailed"));
     } finally {
       setOpenLoading(false);
     }
@@ -108,7 +125,7 @@ export function EntryScreen({
     setCreateError(null);
     try {
       const session = await createSession({
-        language,
+        language: lang,
         prompt_set: promptSet,
         mode,
         overrides:
@@ -123,7 +140,7 @@ export function EntryScreen({
       });
       onCreated(session);
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "创建失败");
+      setCreateError(error instanceof Error ? error.message : t("entry.createError"));
     } finally {
       setCreateLoading(false);
     }
@@ -159,9 +176,9 @@ export function EntryScreen({
                 backgroundPosition: "bottom",
               }}
             >
-              CODE: COnstruct Development Engine
+              {t("entry.brandTitle")}
             </Typography>
-            <Tooltip title="GitHub 仓库" arrow>
+            <Tooltip title={t("entry.githubTooltip")} arrow>
               <IconButton
                 component="a"
                 href={GITHUB_URL}
@@ -180,30 +197,72 @@ export function EntryScreen({
             direction="row"
             alignItems="center"
             justifyContent="center"
-            gap={1}
+            gap={1.5}
             sx={{ pb: 0.5 }}
           >
             <Chip
               size="small"
               variant="outlined"
-              label={`在线 ${presence.online_sessions} 个会话 · ${presence.online_connections} 个连接`}
+              label={t("entry.presenceOnline", {
+                sessions: presence.online_sessions,
+              })}
               sx={{
                 color: terminalColors.green,
                 borderColor: "rgba(63, 185, 80, 0.45)",
                 bgcolor: "rgba(63, 185, 80, 0.06)",
-                fontSize: 12,
-                height: 22,
+                fontSize: fontSizes.sm,
+                height: 24,
                 "& .MuiChip-label": { px: 1 },
               }}
             />
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={lang}
+              onChange={(_event, next: UiLang | null) => {
+                if (next !== null) setLang(next);
+              }}
+              sx={{
+                borderRadius: 999,
+                border: `1px solid ${terminalColors.border}`,
+                bgcolor: "rgba(255,255,255,0.03)",
+                overflow: "hidden",
+                "& .MuiToggleButton-root": {
+                  color: terminalColors.gray,
+                  border: "none",
+                  borderRight: `1px solid ${terminalColors.border}`,
+                  borderRadius: 0,
+                  px: 1.4,
+                  py: 0.25,
+                  fontSize: fontSizes.sm,
+                  lineHeight: 1.4,
+                  height: 24,
+                  minWidth: 38,
+                  transition: "all 160ms ease",
+                  "&:last-child": { borderRight: "none" },
+                  "&.Mui-selected": {
+                    color: terminalColors.cyan,
+                    bgcolor: "rgba(57, 197, 207, 0.16)",
+                    "&:hover": { bgcolor: "rgba(57, 197, 207, 0.24)" },
+                  },
+                  "&:not(.Mui-selected):hover": {
+                    color: terminalColors.text,
+                    bgcolor: "rgba(255, 255, 255, 0.05)",
+                  },
+                },
+              }}
+            >
+              <ToggleButton value="zh">中</ToggleButton>
+              <ToggleButton value="en">EN</ToggleButton>
+            </ToggleButtonGroup>
           </Stack>
         </Box>
 
         {!loading && recentSessions.length > 0 && (
           <Card sx={cardSx}>
             <CardContent sx={{ p: 2.5, "&:last-child": { pb: 2.5 } }}>
-              <Typography variant="subtitle2" sx={{ ...sectionTitleSx, mb: 1 }}>
-                本机最近使用
+              <Typography sx={{ ...sectionTitleSx, mb: 1 }}>
+                {t("entry.recentTitle")}
               </Typography>
               <List dense disablePadding>
                 {recentSessions.map((session) => (
@@ -225,10 +284,10 @@ export function EntryScreen({
                     <ListItemText
                       primary={session.id}
                       secondary={session.status_summary}
-                      primaryTypographyProps={{ fontSize: "0.82rem", fontWeight: 600 }}
-                      secondaryTypographyProps={{ fontSize: "0.72rem", color: terminalColors.gray }}
+                      primaryTypographyProps={{ fontSize: fontSizes.md, fontWeight: 600 }}
+                      secondaryTypographyProps={{ fontSize: fontSizes.sm, color: terminalColors.gray }}
                     />
-                    <Tooltip title="复制 session_id">
+                    <Tooltip title={t("entry.copyTooltip")}>
                       <IconButton
                         className="copy-btn"
                         size="small"
@@ -243,8 +302,8 @@ export function EntryScreen({
                       </IconButton>
                     </Tooltip>
                     <Stack direction="row" spacing={0.5}>
-                      <Chip label={session.env_mode} size="small" sx={{ height: 20, fontSize: "0.65rem" }} />
-                      <Chip label={session.prompt_set} size="small" sx={{ height: 20, fontSize: "0.65rem" }} />
+                      <Chip label={session.env_mode} size="small" sx={{ height: 20, fontSize: fontSizes.xs }} />
+                      <Chip label={session.prompt_set} size="small" sx={{ height: 20, fontSize: fontSizes.xs }} />
                     </Stack>
                   </ListItemButton>
                 ))}
@@ -255,8 +314,8 @@ export function EntryScreen({
 
         <Card sx={cardSx}>
           <CardContent sx={{ p: 2.5, "&:last-child": { pb: 2.5 } }}>
-            <Typography variant="subtitle1" sx={{ ...sectionTitleSx, mb: 2 }}>
-              打开已有 workspace
+            <Typography sx={{ ...sectionTitleSx, mb: 2 }}>
+              {t("entry.openTitle")}
             </Typography>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
               <TextField
@@ -276,11 +335,11 @@ export function EntryScreen({
                 onClick={() => void handleOpen()}
                 sx={{ minWidth: { sm: 96 }, alignSelf: { sm: "flex-end" }, height: 40 }}
               >
-                打开
+                {t("entry.openButton")}
               </Button>
             </Stack>
             {openError && (
-              <Typography sx={{ color: terminalColors.yellow, mt: 1.5, fontSize: "0.85rem" }}>
+              <Typography sx={{ color: terminalColors.yellow, mt: 1.5, fontSize: fontSizes.sm }}>
                 {openError}
               </Typography>
             )}
@@ -290,25 +349,25 @@ export function EntryScreen({
         <Divider
           sx={{
             borderColor: terminalColors.border,
-            fontSize: "0.75rem",
+            fontSize: fontSizes.sm,
             color: terminalColors.gray,
             "&::before, &::after": {
               borderColor: terminalColors.border,
             },
           }}
         >
-          或
+          {t("entry.or")}
         </Divider>
 
         <Card sx={cardSx}>
           <CardContent sx={{ p: 2.5, "&:last-child": { pb: 2.5 } }}>
-            <Typography variant="subtitle1" sx={{ ...sectionTitleSx, mb: 2 }}>
-              新建 workspace
+            <Typography sx={{ ...sectionTitleSx, mb: 2 }}>
+              {t("entry.createTitle")}
             </Typography>
 
             <FormControl fullWidth sx={{ mb: 2.5 }}>
-              <FormLabel sx={{ color: terminalColors.gray, mb: 1, fontSize: "0.85rem" }}>
-                模式
+              <FormLabel sx={{ color: terminalColors.gray, mb: 1, fontSize: fontSizes.md }}>
+                {t("entry.modeLabel")}
               </FormLabel>
               <RadioGroup
                 row
@@ -318,98 +377,82 @@ export function EntryScreen({
                 <FormControlLabel
                   value="env"
                   control={<Radio size="small" />}
-                  label="Default Provider"
+                  label={t("entry.modeEnv")}
                 />
                 <FormControlLabel
                   value="byok"
                   control={<Radio size="small" />}
-                  label="BYOK (Bring Your Own Key)"
+                  label={t("entry.modeByok")}
                 />
               </RadioGroup>
             </FormControl>
 
             {mode === "byok" && (
               <Stack spacing={1.5} sx={{ mb: 2.5 }}>
-                <Stack direction="row" spacing={1} alignItems="flex-end">
-                  <TextField
-                    size="small"
-                    label="OPENAI_API_KEY"
-                    required
-                    fullWidth
-                    type={showApiKey ? "text" : "password"}
-                    value={apiKey}
-                    onChange={(event) => setApiKey(event.target.value)}
-                  />
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => setShowApiKey((prev) => !prev)}
-                    sx={{ minWidth: 72, height: 40, borderColor: terminalColors.border }}
-                  >
-                    {showApiKey ? "隐藏" : "显示"}
-                  </Button>
-                </Stack>
-                <Grid container spacing={1.5}>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="OPENAI_BASE_URL"
-                      placeholder="https://api.deepseek.com/v1"
-                      value={baseUrl}
-                      onChange={(event) => setBaseUrl(event.target.value)}
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="OPENAI_MODEL"
-                      placeholder="deepseek-v4-flash"
-                      value={model}
-                      onChange={(event) => setModel(event.target.value)}
-                    />
-                  </Grid>
-                </Grid>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="OPENAI_API_KEY"
+                  required
+                  type={showApiKey ? "text" : "password"}
+                  value={apiKey}
+                  onChange={(event) => setApiKey(event.target.value)}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          size="small"
+                          edge="end"
+                          onClick={() => setShowApiKey((prev) => !prev)}
+                          sx={{ color: terminalColors.gray }}
+                        >
+                          {showApiKey ? (
+                            <VisibilityOffOutlinedIcon fontSize="small" />
+                          ) : (
+                            <VisibilityOutlinedIcon fontSize="small" />
+                          )}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="OPENAI_BASE_URL"
+                  placeholder="https://api.deepseek.com/v1"
+                  value={baseUrl}
+                  onChange={(event) => setBaseUrl(event.target.value)}
+                />
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="OPENAI_MODEL"
+                  placeholder="deepseek-v4-flash"
+                  value={model}
+                  onChange={(event) => setModel(event.target.value)}
+                />
               </Stack>
             )}
 
-            <Grid container spacing={1.5} sx={{ mb: 1 }}>
-              <Grid item xs={12} sm={7}>
-                <FormControl fullWidth size="small">
-                  <FormLabel sx={{ color: terminalColors.gray, mb: 1, fontSize: "0.85rem" }}>
-                    Prompt 集
-                  </FormLabel>
-                  <Select
-                    value={promptSet}
-                    onChange={(event) => setPromptSet(event.target.value as PromptSet)}
-                  >
-                    {PROMPT_OPTIONS.map((option) => (
-                      <MenuItem key={option.value} value={option.value}>
-                        {option.label}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={5}>
-                <FormControl fullWidth size="small">
-                  <FormLabel sx={{ color: terminalColors.gray, mb: 1, fontSize: "0.85rem" }}>
-                    语言
-                  </FormLabel>
-                  <Select
-                    value={language}
-                    onChange={(event) => setLanguage(event.target.value as "zh" | "en")}
-                  >
-                    <MenuItem value="zh">zh</MenuItem>
-                    <MenuItem value="en">en</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-            </Grid>
+            <FormControl fullWidth size="small" sx={{ mb: 1 }}>
+              <FormLabel sx={{ color: terminalColors.gray, mb: 1, fontSize: fontSizes.md }}>
+                {t("entry.promptSetLabel")}
+              </FormLabel>
+              <Select
+                value={promptSet}
+                onChange={(event) => setPromptSet(event.target.value as PromptSet)}
+              >
+                {promptOptions.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.value}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
-            <Typography sx={{ color: terminalColors.gray, fontSize: "0.8rem", mb: 2.5 }}>
-              {PROMPT_OPTIONS.find((item) => item.value === promptSet)?.hint}
+            <Typography sx={{ color: terminalColors.gray, fontSize: fontSizes.sm, mb: 2.5 }}>
+              {t(ALL_PROMPT_OPTIONS.find((item) => item.value === promptSet)?.hintKey ?? "")}
             </Typography>
 
             <Button
@@ -424,10 +467,10 @@ export function EntryScreen({
                 "&:active": { transform: "scale(0.98)" },
               }}
             >
-              创建并进入
+              {t("entry.createButton")}
             </Button>
             {createError && (
-              <Typography sx={{ color: terminalColors.yellow, mt: 1.5, fontSize: "0.85rem" }}>
+              <Typography sx={{ color: terminalColors.yellow, mt: 1.5, fontSize: fontSizes.sm }}>
                 {createError}
               </Typography>
             )}

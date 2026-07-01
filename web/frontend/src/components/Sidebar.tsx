@@ -13,7 +13,8 @@ import {
   Typography,
 } from "@mui/material";
 import GitHubIcon from "@mui/icons-material/GitHub";
-import { terminalColors } from "../theme";
+import { useI18n } from "../i18n/LanguageContext";
+import { fontSizes, terminalColors } from "../theme";
 import type { SessionSummary } from "../types";
 import { ConfirmDialog } from "./ConfirmDialog";
 
@@ -36,6 +37,7 @@ export function SidebarContent({
   onRefresh: _onRefresh,
   onHome,
 }: SidebarContentProps) {
+  const { t } = useI18n();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   return (
@@ -45,7 +47,7 @@ export function SidebarContent({
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
             CODE
           </Typography>
-          <Tooltip title="GitHub 仓库" arrow>
+          <Tooltip title={t("sidebar.githubTooltip")} arrow>
             <IconButton
               size="small"
               component="a"
@@ -59,10 +61,10 @@ export function SidebarContent({
           </Tooltip>
         </Stack>
         <Typography variant="caption" sx={{ color: terminalColors.gray, display: "block" }}>
-          COnstruct Development Engine
+          {t("entry.subtitle")}
         </Typography>
         <Button size="small" variant="text" sx={{ mt: 1, px: 0 }} onClick={onHome}>
-          首页
+          {t("sidebar.home")}
         </Button>
       </Box>
 
@@ -73,12 +75,12 @@ export function SidebarContent({
           variant="caption"
           sx={{ color: terminalColors.gray, px: 2, py: 1, display: "block" }}
         >
-          本机最近使用
+          {t("sidebar.recentTitle")}
         </Typography>
         <List dense disablePadding>
           {sessions.length === 0 ? (
-            <Typography sx={{ color: terminalColors.gray, px: 2, py: 1, fontSize: "0.75rem" }}>
-              暂无记录
+            <Typography sx={{ color: terminalColors.gray, px: 2, py: 1, fontSize: fontSizes.sm }}>
+              {t("sidebar.empty")}
             </Typography>
           ) : (
             sessions.map((session) => (
@@ -104,18 +106,18 @@ export function SidebarContent({
                         <Chip
                           size="small"
                           label={session.env_mode}
-                          sx={{ height: 18, fontSize: "0.65rem" }}
+                          sx={{ height: 18, fontSize: fontSizes.xs }}
                         />
                         <Chip
                           size="small"
                           label={session.prompt_set}
-                          sx={{ height: 18, fontSize: "0.65rem" }}
+                          sx={{ height: 18, fontSize: fontSizes.xs }}
                         />
                       </Stack>
                     </Stack>
                   }
                   primaryTypographyProps={{
-                    fontSize: "0.75rem",
+                    fontSize: fontSizes.sm,
                     noWrap: true,
                   }}
                   secondaryTypographyProps={{ component: "div" }}
@@ -141,7 +143,7 @@ export function SidebarContent({
                 fullWidth
                 onClick={() => setConfirmDeleteId(activeSessionId)}
               >
-                删除 session
+                {t("sidebar.deleteSession")}
               </Button>
             </Stack>
           </Box>
@@ -150,9 +152,9 @@ export function SidebarContent({
 
       <ConfirmDialog
         open={confirmDeleteId !== null}
-        title="删除 session"
-        message={`确认删除 session ${confirmDeleteId ?? ""}？此操作不可撤销。`}
-        confirmLabel="删除"
+        title={t("sidebar.confirmTitle")}
+        message={t("sidebar.confirmMessage", { id: confirmDeleteId ?? "" })}
+        confirmLabel={t("sidebar.confirmLabel")}
         confirmColor="error"
         onConfirm={() => {
           if (confirmDeleteId) onDelete(confirmDeleteId);

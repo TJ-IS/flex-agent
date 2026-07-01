@@ -42,6 +42,14 @@ class CreateSessionRequest(BaseModel):
         return {k: v.strip() for k, v in raw.items() if v and str(v).strip()}
 
 
+class UpdateEnvRequest(BaseModel):
+    overrides: EnvOverrides = Field(default_factory=EnvOverrides)
+
+    def overrides_dict(self) -> dict[str, str]:
+        raw = self.overrides.model_dump()
+        return {k: v.strip() for k, v in raw.items() if v and str(v).strip()}
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="CODE: COnstructDevelopmentEngine Web TUI", version="0.1.0")
 
@@ -220,6 +228,24 @@ def create_app() -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {"status": "ok"}
+
+    @app.get("/api/sessions/{session_id}/env")
+    def get_session_env(session_id: str) -> dict[str, Any]:
+        try:
+            return session_manager.get_env(session_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.put("/api/sessions/{session_id}/env")
+    def update_session_env(session_id: str, body: UpdateEnvRequest) -> dict[str, Any]:
+        try:
+            return session_manager.save_env(session_id, body.overrides_dict())
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.websocket("/api/sessions/{session_id}/stream")
     async def session_stream(websocket: WebSocket, session_id: str) -> None:

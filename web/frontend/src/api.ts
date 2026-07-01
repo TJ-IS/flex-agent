@@ -1,5 +1,7 @@
 import type {
   CreateSessionParams,
+  EnvMode,
+  EnvOverrides,
   SessionDetail,
   ServerEvent,
   PresenceStats,
@@ -110,6 +112,26 @@ export async function getTaskBackground(sessionId: string): Promise<string> {
   return getTextFile(sessionId, "prompts/task_background.md");
 }
 
+export interface SessionEnv {
+  mode: EnvMode;
+  overrides: Partial<EnvOverrides>;
+}
+
+export async function getSessionEnv(sessionId: string): Promise<SessionEnv> {
+  return request<SessionEnv>(`/api/sessions/${encodeURIComponent(sessionId)}/env`);
+}
+
+export async function saveSessionEnv(
+  sessionId: string,
+  overrides: EnvOverrides,
+): Promise<SessionEnv> {
+  return request<SessionEnv>(`/api/sessions/${encodeURIComponent(sessionId)}/env`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ overrides }),
+  });
+}
+
 export async function saveTaskBackground(
   sessionId: string,
   content: string,
@@ -184,7 +206,7 @@ export function sendInterrupt(ws: WebSocket): void {
 }
 
 export function languageForPromptSet(promptSet: CreateSessionParams["prompt_set"]): "zh" | "en" {
-  return promptSet === "baseline_en" ? "en" : "zh";
+  return promptSet.endsWith("_en") ? "en" : "zh";
 }
 
 export async function getPresence(): Promise<PresenceStats> {

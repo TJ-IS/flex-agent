@@ -198,7 +198,7 @@ class StreamEventParser:
             for call in message.tool_calls:
                 tool_name = str(call.get("name") or "unknown")
                 tool_call_id = str(call.get("id") or f"{tool_name}:{len(self.steps)}")
-                if tool_call_id in self.steps and self.steps[tool_call_id].status == StepStatus.RUNNING:
+                if tool_call_id in self.steps:
                     continue
                 args = call.get("args") or {}
                 label = tool_label(tool_name)

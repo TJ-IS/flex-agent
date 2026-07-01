@@ -6,6 +6,7 @@ import {
   DialogContentText,
   DialogTitle,
 } from "@mui/material";
+import { useI18n } from "../i18n/LanguageContext";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -22,12 +23,15 @@ export function ConfirmDialog({
   open,
   title,
   message,
-  confirmLabel = "确认",
-  cancelLabel = "取消",
+  confirmLabel,
+  cancelLabel,
   confirmColor = "primary",
   onConfirm,
   onClose,
 }: ConfirmDialogProps) {
+  const { t } = useI18n();
+  const resolvedConfirm = confirmLabel ?? t("confirm.confirm");
+  const resolvedCancel = cancelLabel ?? t("confirm.cancel");
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
       <DialogTitle>{title}</DialogTitle>
@@ -38,7 +42,7 @@ export function ConfirmDialog({
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} color="inherit">
-          {cancelLabel}
+          {resolvedCancel}
         </Button>
         <Button
           onClick={() => {
@@ -48,7 +52,7 @@ export function ConfirmDialog({
           color={confirmColor}
           variant="contained"
         >
-          {confirmLabel}
+          {resolvedConfirm}
         </Button>
       </DialogActions>
     </Dialog>

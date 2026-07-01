@@ -13,22 +13,32 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  IconButton,
+  InputAdornment,
+  Stack,
   Tab,
   Tabs,
   TextField,
   Typography,
 } from "@mui/material";
+import VisibilityOffOutlinedIcon from "@mui/icons-material/VisibilityOffOutlined";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import {
   downloadFileUrl,
   getTextFile,
+  getSessionEnv,
+  saveSessionEnv,
   saveTaskBackground,
   uploadFile,
   type WorkspaceTextPath,
 } from "../api";
-import { monoFont, terminalColors } from "../theme";
+import { useI18n } from "../i18n/LanguageContext";
+import { fontSizes, monoFont, terminalColors } from "../theme";
+import type { EnvMode } from "../types";
 
 interface WorkspaceEditorProps {
   sessionId: string;
+  envMode: EnvMode;
   open: boolean;
   onClose: () => void;
 }
@@ -66,11 +76,12 @@ const EditableFileTab = forwardRef<EditableFileTabHandle, EditableFileTabProps>(
       loadPath,
       save,
       downloadUrl,
-      savedLabel = "已保存 · agent 已重载",
+      savedLabel,
       onStatusChange,
     },
     ref,
   ) {
+    const { t } = useI18n();
     const [content, setContent] = useState("");
     const [loading, setLoading] = useState(false);
     const [saveState, setSaveState] = useState<SaveState>("idle");
@@ -107,7 +118,7 @@ const EditableFileTab = forwardRef<EditableFileTabHandle, EditableFileTabProps>(
           reportStatus("idle");
         })
         .catch((err: unknown) => {
-          setError(err instanceof Error ? err.message : "加载失败");
+          setError(err instanceof Error ? err.message : t("editor.loadFailed"));
         })
         .finally(() => setLoading(false));
     }, [open, isActive, sessionId, loadPath]);
@@ -141,7 +152,7 @@ const EditableFileTab = forwardRef<EditableFileTabHandle, EditableFileTabProps>(
         setSaveState("saved");
         reportStatus("saved");
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "保存失败");
+        setError(err instanceof Error ? err.message : t("editor.saveFailed"));
         setSaveState("error");
         reportStatus("error");
       } finally {
@@ -202,7 +213,7 @@ const EditableFileTab = forwardRef<EditableFileTabHandle, EditableFileTabProps>(
             download
             sx={{ mb: 1.5, borderColor: terminalColors.border }}
           >
-            下载
+            {t("editor.download")}
           </Button>
         )}
         {error && (
@@ -223,11 +234,11 @@ const EditableFileTab = forwardRef<EditableFileTabHandle, EditableFileTabProps>(
             contentRef.current = next;
             scheduleSave(next);
           }}
-          placeholder={loading ? "加载中…" : ""}
+          placeholder={loading ? t("editor.loading") : ""}
           InputProps={{
             sx: {
               fontFamily: monoFont,
-              fontSize: "0.85rem",
+              fontSize: fontSizes.md,
               color: terminalColors.text,
             },
           }}
@@ -235,7 +246,7 @@ const EditableFileTab = forwardRef<EditableFileTabHandle, EditableFileTabProps>(
         <Typography
           sx={{
             mt: 1,
-            fontSize: "0.72rem",
+            fontSize: fontSizes.sm,
             color: terminalColors.gray,
             opacity: 0.7,
           }}
@@ -247,44 +258,251 @@ const EditableFileTab = forwardRef<EditableFileTabHandle, EditableFileTabProps>(
   },
 );
 
-const TABS = [
-  {
-    label: "task_background.md",
-    loadPath: "prompts/task_background.md" as const,
-    save: saveTaskBackground,
-    savedLabel: "已保存 · agent 已重载，对话记忆会被重置",
-  },
-  {
-    label: "corpus.jsonl",
-    loadPath: "files/corpus.jsonl" as const,
-    save: async (sessionId: string, content: string) => {
-      await uploadFile(
-        sessionId,
-        "corpus.jsonl",
-        new File([content], "corpus.jsonl", { type: "application/x-ndjson" }),
-      );
-    },
-    downloadKind: "corpus.jsonl" as const,
-    savedLabel: "已保存 · agent 已重载",
-  },
-  {
-    label: "corpus_with_labels.jsonl",
-    loadPath: "files/corpus_with_labels.jsonl" as const,
-    save: async (sessionId: string, content: string) => {
-      await uploadFile(
-        sessionId,
-        "corpus_with_labels.jsonl",
-        new File([content], "corpus_with_labels.jsonl", {
-          type: "application/x-ndjson",
-        }),
-      );
-    },
-    downloadKind: "corpus_with_labels.jsonl" as const,
-    savedLabel: "已保存 · agent 已重载",
-  },
-];
+type TFunction = ReturnType<typeof useI18n>["t"];
 
-export function WorkspaceEditor({ sessionId, open, onClose }: WorkspaceEditorProps) {
+interface EditorTab {
+  label: string;
+  loadPath: WorkspaceTextPath;
+  save: (sessionId: string, content: string) => Promise<void>;
+  savedLabel: string;
+  downloadKind?: "corpus.jsonl" | "corpus_with_labels.jsonl";
+  byok?: boolean;
+}
+
+function buildTabs(t: TFunction, envMode: EnvMode): EditorTab[] {
+  const fileTabs: EditorTab[] = [
+    {
+      label: "task_background.md",
+      loadPath: "prompts/task_background.md",
+      save: saveTaskBackground,
+      savedLabel: t("editor.savedReloadReset"),
+    },
+    {
+      label: "corpus.jsonl",
+      loadPath: "files/corpus.jsonl",
+      save: async (sessionId: string, content: string) => {
+        await uploadFile(
+          sessionId,
+          "corpus.jsonl",
+          new File([content], "corpus.jsonl", { type: "application/x-ndjson" }),
+        );
+      },
+      downloadKind: "corpus.jsonl",
+      savedLabel: t("editor.savedReload"),
+    },
+    {
+      label: "corpus_with_labels.jsonl",
+      loadPath: "files/corpus_with_labels.jsonl",
+      save: async (sessionId: string, content: string) => {
+        await uploadFile(
+          sessionId,
+          "corpus_with_labels.jsonl",
+          new File([content], "corpus_with_labels.jsonl", {
+            type: "application/x-ndjson",
+          }),
+        );
+      },
+      downloadKind: "corpus_with_labels.jsonl",
+      savedLabel: t("editor.savedReload"),
+    },
+  ];
+  if (envMode === "byok") {
+    fileTabs.push({
+      label: t("editor.byokTab"),
+      loadPath: "prompts/task_background.md",
+      save: async () => {},
+      savedLabel: "",
+      byok: true,
+    });
+  }
+  return fileTabs;
+}
+
+type ByokStatus = "idle" | "saving" | "saved" | "error";
+
+interface ByokTabProps {
+  sessionId: string;
+  open: boolean;
+  isActive: boolean;
+}
+
+function ByokTab({ sessionId, open, isActive }: ByokTabProps) {
+  const { t } = useI18n();
+  const [apiKey, setApiKey] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [model, setModel] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [status, setStatus] = useState<ByokStatus>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const loadedRef = useRef(false);
+
+  useEffect(() => {
+    if (!open || !isActive) return;
+    if (loadedRef.current) return;
+    setLoading(true);
+    setError(null);
+    void getSessionEnv(sessionId)
+      .then((env) => {
+        setApiKey(env.overrides.OPENAI_API_KEY ?? "");
+        setBaseUrl(env.overrides.OPENAI_BASE_URL ?? "");
+        setModel(env.overrides.OPENAI_MODEL ?? "");
+        loadedRef.current = true;
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : t("editor.byokLoadFailed"));
+      })
+      .finally(() => setLoading(false));
+  }, [open, isActive, sessionId, t]);
+
+  useEffect(() => {
+    if (open) return;
+    loadedRef.current = false;
+    setStatus("idle");
+    setError(null);
+  }, [open]);
+
+  if (!isActive) return null;
+
+  const handleSave = async () => {
+    setStatus("saving");
+    setError(null);
+    try {
+      await saveSessionEnv(sessionId, {
+        OPENAI_API_KEY: apiKey,
+        OPENAI_BASE_URL: baseUrl,
+        OPENAI_MODEL: model,
+        OPENAI_MODEL_PRO: model,
+      });
+      setStatus("saved");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t("editor.byokSaveFailed"));
+      setStatus("error");
+    }
+  };
+
+  const statusLabel = (() => {
+    switch (status) {
+      case "saving":
+        return t("editor.byokSaving");
+      case "saved":
+        return t("editor.byokSaved");
+      case "error":
+        return t("editor.byokSaveFailed");
+      default:
+        return "";
+    }
+  })();
+
+  const statusColor = (() => {
+    switch (status) {
+      case "saving":
+        return terminalColors.gray;
+      case "saved":
+        return terminalColors.green;
+      case "error":
+        return terminalColors.red;
+      default:
+        return terminalColors.gray;
+    }
+  })();
+
+  return (
+    <Box>
+      {error && (
+        <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+      <Stack spacing={1.5}>
+        <TextField
+          fullWidth
+          size="small"
+          label="OPENAI_API_KEY"
+          required
+          type={showApiKey ? "text" : "password"}
+          value={apiKey}
+          disabled={loading}
+          onChange={(event) => setApiKey(event.target.value)}
+          InputProps={{
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton
+                  size="small"
+                  edge="end"
+                  onClick={() => setShowApiKey((prev) => !prev)}
+                  sx={{ color: terminalColors.gray }}
+                >
+                  {showApiKey ? (
+                    <VisibilityOffOutlinedIcon fontSize="small" />
+                  ) : (
+                    <VisibilityOutlinedIcon fontSize="small" />
+                  )}
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+        />
+        <TextField
+          fullWidth
+          size="small"
+          label="OPENAI_BASE_URL"
+          placeholder="https://api.deepseek.com/v1"
+          value={baseUrl}
+          disabled={loading}
+          onChange={(event) => setBaseUrl(event.target.value)}
+        />
+        <TextField
+          fullWidth
+          size="small"
+          label="OPENAI_MODEL"
+          placeholder="deepseek-v4-flash"
+          value={model}
+          disabled={loading}
+          onChange={(event) => setModel(event.target.value)}
+        />
+      </Stack>
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={1.5}
+        sx={{ mt: 2 }}
+      >
+        <Button
+          size="small"
+          variant="outlined"
+          disabled={loading || status === "saving" || !apiKey.trim()}
+          onClick={() => void handleSave()}
+          sx={{ borderColor: terminalColors.border, color: terminalColors.text }}
+        >
+          {t("editor.byokSave")}
+        </Button>
+        {status === "saving" && (
+          <CircularProgress size={12} sx={{ color: statusColor }} />
+        )}
+        {statusLabel && (
+          <Typography sx={{ fontSize: fontSizes.sm, color: statusColor }}>
+            {statusLabel}
+          </Typography>
+        )}
+      </Stack>
+      <Typography
+        sx={{
+          mt: 1.5,
+          fontSize: fontSizes.sm,
+          color: terminalColors.gray,
+          opacity: 0.7,
+        }}
+      >
+        {t("editor.byokHint")}
+      </Typography>
+    </Box>
+  );
+}
+
+export function WorkspaceEditor({ sessionId, envMode, open, onClose }: WorkspaceEditorProps) {
+  const { t } = useI18n();
+  const tabs = buildTabs(t, envMode);
   const [tabIndex, setTabIndex] = useState(0);
   const [tabStatus, setTabStatus] = useState<TabSaveStatus>({
     saveState: "idle",
@@ -308,13 +526,13 @@ export function WorkspaceEditor({ sessionId, open, onClose }: WorkspaceEditorPro
   const statusLabel = (() => {
     switch (tabStatus.saveState) {
       case "saving":
-        return "保存中…";
+        return t("editor.saving");
       case "saved":
-        return "已保存";
+        return t("editor.saved");
       case "error":
-        return "保存失败";
+        return t("editor.saveFailed");
       default:
-        return tabStatus.dirty ? "未保存" : "已同步";
+        return tabStatus.dirty ? t("editor.unsaved") : t("editor.synced");
     }
   })();
 
@@ -341,13 +559,13 @@ export function WorkspaceEditor({ sessionId, open, onClose }: WorkspaceEditorPro
           pb: 1,
         }}
       >
-        <span>编辑 workspace 文件</span>
+        <span>{t("editor.title")}</span>
         <Box
           sx={{
             display: "flex",
             alignItems: "center",
             gap: 0.75,
-            fontSize: "0.78rem",
+            fontSize: fontSizes.sm,
             color: statusColor,
             fontWeight: 400,
           }}
@@ -360,47 +578,64 @@ export function WorkspaceEditor({ sessionId, open, onClose }: WorkspaceEditorPro
       </DialogTitle>
       <DialogContent>
         <Alert severity="info" sx={{ mb: 2 }}>
-          修改会自动保存（停止输入约 {AUTOSAVE_DELAY_MS}ms 后触发）。保存后 agent
-          自动重载；workspace 编码状态保留。
+          {t("editor.alert", { ms: AUTOSAVE_DELAY_MS })}
         </Alert>
         <Tabs
           value={tabIndex}
           onChange={(_, next) => void handleTabChange(_, next)}
-          sx={{ mb: 2, borderBottom: `1px solid ${terminalColors.border}` }}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
+          sx={{
+            mb: 2,
+            minHeight: 40,
+            borderBottom: `1px solid ${terminalColors.border}`,
+            "& .MuiTab-scrollButtons": { color: terminalColors.gray },
+          }}
         >
-          {TABS.map((tab) => (
-            <Tab key={tab.label} label={tab.label} sx={{ fontSize: "0.8rem", minHeight: 40 }} />
+          {tabs.map((tab) => (
+            <Tab key={tab.label} label={tab.label} sx={{ fontSize: fontSizes.md, minHeight: 40 }} />
           ))}
         </Tabs>
-        {TABS.map((tab, index) => (
-          <EditableFileTab
-            key={tab.label}
-            ref={(node) => {
-              tabRefs.current[index] = node;
-            }}
-            sessionId={sessionId}
-            open={open}
-            isActive={open && tabIndex === index}
-            loadPath={tab.loadPath}
-            save={tab.save}
-            savedLabel={tab.savedLabel}
-            downloadUrl={
-              "downloadKind" in tab && tab.downloadKind
-                ? downloadFileUrl(sessionId, tab.downloadKind)
-                : undefined
-            }
-            onStatusChange={tabIndex === index ? setTabStatus : () => {}}
-          />
-        ))}
+        {tabs.map((tab, index) => {
+          if (tab.byok) {
+            return (
+              <ByokTab
+                key={tab.label}
+                sessionId={sessionId}
+                open={open}
+                isActive={open && tabIndex === index}
+              />
+            );
+          }
+          return (
+            <EditableFileTab
+              key={tab.label}
+              ref={(node) => {
+                tabRefs.current[index] = node;
+              }}
+              sessionId={sessionId}
+              open={open}
+              isActive={open && tabIndex === index}
+              loadPath={tab.loadPath}
+              save={tab.save}
+              savedLabel={tab.savedLabel}
+              downloadUrl={
+                tab.downloadKind ? downloadFileUrl(sessionId, tab.downloadKind) : undefined
+              }
+              onStatusChange={tabIndex === index ? setTabStatus : () => {}}
+            />
+          );
+        })}
         <Typography
           sx={{
             mt: 1,
-            fontSize: "0.72rem",
+            fontSize: fontSizes.sm,
             color: terminalColors.gray,
             opacity: 0.7,
           }}
         >
-          切换 Tab 或关闭窗口时若有未保存改动会自动保存。
+          {t("editor.hintSwitch")}
         </Typography>
       </DialogContent>
     </Dialog>

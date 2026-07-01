@@ -387,6 +387,11 @@ async def ws_message_loop(
 
     while True:
         raw = await websocket.receive_text()
+
+        latest = session_manager.get_or_create_runtime(runtime.session_id)
+        if latest is not runtime:
+            runtime = latest
+
         try:
             message = json.loads(raw)
         except json.JSONDecodeError:

@@ -64,6 +64,34 @@ class StreamEventParserTests(unittest.TestCase):
         flushed = parser.flush_assistant_text()
         self.assertEqual([entry.kind for entry in flushed.timeline], ["assistant"])
 
+    def test_done_step_not_reappended_in_next_turn(self) -> None:
+        parser = StreamEventParser()
+        human1 = HumanMessage(content="hello")
+        ai1 = AIMessage(
+            content="",
+            tool_calls=[
+                {"name": "batch_open_coding", "args": {"text_ids": [1]}, "id": "call-1"}
+            ],
+        )
+        tool1 = ToolMessage(content="done", tool_call_id="call-1")
+        human2 = HumanMessage(content="thanks")
+        ai2 = AIMessage(content="you're welcome")
+
+        parser.consume({"messages": [human1, ai1]})
+        parser.consume({"messages": [human1, ai1, tool1]})
+        self.assertEqual(parser.steps["call-1"].status, StepStatus.DONE)
+
+        update = parser.consume({"messages": [human1, ai1, tool1, human2, ai2]})
+
+        step_entries = [
+            e for e in update.timeline if e.kind == "step" and e.step_id == "call-1"
+        ]
+        self.assertEqual(
+            len(step_entries),
+            0,
+            "DONE step must not be re-appended in next turn",
+        )
+
     def test_note_user_message_deduplicates_stream_human(self) -> None:
         parser = StreamEventParser()
         noted = parser.note_user_message("once")

@@ -4,6 +4,7 @@ import { deleteSession, getSession } from "./api";
 import { EntryScreen } from "./components/EntryScreen";
 import { Sidebar, SidebarContent } from "./components/Sidebar";
 import { Terminal } from "./components/Terminal";
+import { useI18n } from "./i18n/LanguageContext";
 import { usePresence } from "./hooks/usePresence";
 import {
   listLocalSessions,
@@ -15,6 +16,7 @@ import { terminalColors } from "./theme";
 import type { SessionSummary } from "./types";
 
 export default function App() {
+  const { t } = useI18n();
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up("md"));
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
@@ -44,7 +46,12 @@ export default function App() {
               typeof detail.status === "object" &&
               detail.status &&
               "coded_count" in detail.status
-                ? `texts=${detail.status.texts_total ?? 0} · coded=${detail.status.coded_count ?? 0} · queue=${detail.status.queue_remaining ?? 0} · dimensions=${detail.status.dimensions_count ?? 0}`
+                ? t("app.statusSummary", {
+                    texts: Number(detail.status.texts_total ?? 0),
+                    coded: Number(detail.status.coded_count ?? 0),
+                    queue: Number(detail.status.queue_remaining ?? 0),
+                    dimensions: Number(detail.status.dimensions_count ?? 0),
+                  })
                 : record.id,
             workspace_root: String(detail.meta?.workspace_resolved ?? ""),
             env_mode: detail.env_mode,
@@ -59,7 +66,7 @@ export default function App() {
 
     setSessions(results.filter((item): item is SessionSummary => item !== null));
     setLoading(false);
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void refreshSessions();
@@ -102,7 +109,7 @@ export default function App() {
       }
       await refreshSessions();
     } catch (err) {
-      setErrorToast(err instanceof Error ? err.message : "删除 session 失败");
+      setErrorToast(err instanceof Error ? err.message : t("app.deleteFailed"));
     }
   };
 

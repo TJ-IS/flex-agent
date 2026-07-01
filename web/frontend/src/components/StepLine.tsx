@@ -1,5 +1,5 @@
 import { Box, Typography } from "@mui/material";
-import { terminalColors } from "../theme";
+import { fontSizes, terminalColors } from "../theme";
 import type { StepRecord } from "../types";
 
 const ICONS: Record<StepRecord["status"], string> = {
@@ -35,6 +35,7 @@ export function StepLine({ step }: StepLineProps) {
           display: "flex",
           alignItems: "flex-start",
           gap: 0.5,
+          fontSize: fontSizes.md,
         }}
       >
         <Box
@@ -65,6 +66,7 @@ export function StepLine({ step }: StepLineProps) {
             pl: 2,
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
+            fontSize: fontSizes.md,
           }}
         >
           {`  └ ${preview}`}

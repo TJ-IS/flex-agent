@@ -1,6 +1,7 @@
 import { useRef } from "react";
-import { Box, Button, CircularProgress, Stack, TextField } from "@mui/material";
-import { terminalColors, toolbarButtonSx } from "../theme";
+import { Box, Button, CircularProgress, InputAdornment, Stack, TextField } from "@mui/material";
+import { useI18n } from "../i18n/LanguageContext";
+import { terminalColors, fontSizes, toolbarButtonSx } from "../theme";
 
 const SLASH_COMMANDS = [
   "/help",
@@ -29,6 +30,7 @@ export function InputBar({
   busy,
   onInterrupt,
 }: InputBarProps) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const inputDisabled = disabled || busy;
 
@@ -42,8 +44,7 @@ export function InputBar({
         transition: "opacity 200ms ease",
       }}
     >
-      <Stack direction="row" spacing={1} alignItems="center">
-        <TypographyPrompt />
+      <Stack direction="row" spacing={1} alignItems="flex-end">
         <TextField
           inputRef={inputRef}
           fullWidth
@@ -59,10 +60,24 @@ export function InputBar({
               onSubmit();
             }
           }}
-          placeholder={busy ? "Agent 推理中，请稍候…" : "输入 open coding 任务或 slash 命令…"}
+          placeholder={busy ? t("input.placeholderBusy") : t("input.placeholderIdle")}
           variant="standard"
           InputProps={{
             disableUnderline: true,
+            startAdornment: (
+              <InputAdornment position="start" disablePointerEvents>
+                <Box
+                  component="span"
+                  sx={{
+                    color: terminalColors.cyan,
+                    fontWeight: 700,
+                    userSelect: "none",
+                  }}
+                >
+                  {">"}
+                </Box>
+              </InputAdornment>
+            ),
             sx: {
               color: terminalColors.text,
               fontFamily: "inherit",
@@ -88,7 +103,7 @@ export function InputBar({
             }}
           >
             <CircularProgress size={14} color="inherit" />
-            停止
+            {t("input.stop")}
           </Button>
         ) : (
           <Button
@@ -98,7 +113,7 @@ export function InputBar({
             onClick={onSubmit}
             sx={{ ...toolbarButtonSx, minWidth: 64 }}
           >
-            发送
+            {t("input.send")}
           </Button>
         )}
       </Stack>
@@ -127,29 +142,13 @@ export function InputBar({
               color: terminalColors.gray,
               minWidth: "auto",
               px: 0.75,
-              fontSize: "0.7rem",
+              fontSize: fontSizes.xs,
             }}
           >
             {cmd}
           </Button>
         ))}
       </Stack>
-    </Box>
-  );
-}
-
-function TypographyPrompt() {
-  return (
-    <Box
-      component="span"
-      sx={{
-        color: terminalColors.cyan,
-        fontWeight: 700,
-        pt: 0.75,
-        userSelect: "none",
-      }}
-    >
-      {"> "}
     </Box>
   );
 }

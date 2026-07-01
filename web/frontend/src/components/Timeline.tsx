@@ -1,5 +1,6 @@
 import { Box, Typography } from "@mui/material";
-import { terminalColors } from "../theme";
+import { useI18n } from "../i18n/LanguageContext";
+import { fontSizes, terminalColors } from "../theme";
 import type { TimelineEntry, StepRecord } from "../types";
 import { StepLine } from "./StepLine";
 
@@ -9,6 +10,7 @@ interface TimelineProps {
 }
 
 export function Timeline({ entry, step }: TimelineProps) {
+  const { t } = useI18n();
   if (entry.kind === "user") {
     return (
       <Box
@@ -24,6 +26,7 @@ export function Timeline({ entry, step }: TimelineProps) {
             fontWeight: 700,
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
+            fontSize: fontSizes.md,
           }}
         >
           {`> ${entry.text}`}
@@ -40,6 +43,7 @@ export function Timeline({ entry, step }: TimelineProps) {
             color: terminalColors.text,
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
+            fontSize: fontSizes.md,
           }}
         >
           {entry.text}
@@ -56,7 +60,7 @@ export function Timeline({ entry, step }: TimelineProps) {
           whiteSpace: "pre-wrap",
           wordBreak: "break-word",
           mb: 0.75,
-          fontSize: "0.85rem",
+          fontSize: fontSizes.md,
         }}
       >
         {entry.text}
@@ -73,7 +77,7 @@ export function Timeline({ entry, step }: TimelineProps) {
           whiteSpace: "pre-wrap",
           wordBreak: "break-word",
           mb: 0.5,
-          fontSize: "0.8rem",
+          fontSize: fontSizes.md,
         }}
       >
         {`› ${entry.text}`}
@@ -95,9 +99,10 @@ export function Timeline({ entry, step }: TimelineProps) {
             color: terminalColors.yellow,
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
+            fontSize: fontSizes.md,
           }}
         >
-          {`error: ${entry.text}`}
+          {`${t("timeline.errorPrefix")}${entry.text}`}
         </Typography>
       </Box>
     );
@@ -117,6 +122,7 @@ export function Timeline({ entry, step }: TimelineProps) {
         color: terminalColors.text,
         whiteSpace: "pre-wrap",
         mb: 0.5,
+        fontSize: fontSizes.md,
       }}
     >
       {entry.text}

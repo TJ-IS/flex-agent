@@ -1,5 +1,5 @@
 import { Box, Typography } from "@mui/material";
-import { sectionAccentSx, terminalColors } from "../theme";
+import { fontSizes, sectionAccentSx, terminalColors } from "../theme";
 import type { TodoItem } from "../types";
 
 const ICONS: Record<TodoItem["status"], string> = {
@@ -29,6 +29,7 @@ export function Todos({ title, items }: TodosProps) {
           color: terminalColors.magenta,
           fontWeight: 700,
           mb: 0.75,
+          fontSize: fontSizes.md,
         }}
       >
         {title}
@@ -41,6 +42,7 @@ export function Todos({ title, items }: TodosProps) {
             pl: 0.5,
             whiteSpace: "pre-wrap",
             mb: 0.25,
+            fontSize: fontSizes.md,
           }}
         >
           {`  ${ICONS[item.status]} ${item.content}`}
